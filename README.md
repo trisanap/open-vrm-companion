@@ -46,88 +46,82 @@ open-vrm-companion/
 ---
 
 ## 🚀 Quick Start
-
+ 
 ### 1. Clone the repo
-
+ 
 ```bash
 git clone https://github.com/trisanap/open-vrm-companion.git
 cd open-vrm-companion
 ```
-
+ 
 ### 2. Create a virtual environment and install dependencies
-
+ 
 ```bash
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install flask flask-cors groq python-dotenv tavily-python
 ```
-
+ 
 ### 3. Set up your environment variables
-
-```bash
-cp .env.example .env
-```
-
+ 
 Edit `.env` and fill in your keys:
-
+ 
 ```
 GROQ_API_KEY=your_groq_api_key_here
-TAVILY_API_KEY=your_tavily_api_key_here   # optional — enables web search
+TAVILY_API_KEY=your_tavily_api_key_here      # optional — enables web search
+TAILSCALE_HOSTNAME=your-machine.ts.net       # optional — enables HTTPS
 ```
-
+ 
 - Get a Groq API key at [console.groq.com](https://console.groq.com)
 - Get a Tavily API key at [app.tavily.com](https://app.tavily.com) (free tier available)
-
 ### 4. Add your VRM model
-
-Place your `.vrm` file in the `assets/` folder and update the model path reference in `webui.html`:
-
+ 
+Place your `.vrm` file in the `assets/` folder and update the model path in `webui.html`:
+ 
 ```js
-const MODEL_PATH = "/assets/Avatar_Sample.vrm";
+const VRM_DEFAULT = assetPathPrefix + "YourCharacter.vrm";
 ```
-
+ 
 > **Don't have a VRM?** Create one for free at [VRoid Studio](https://vroid.com/en/studio) or on Steam. Export as VRM 1.0.
-
+ 
 ### 5. Run the server
-
+ 
 ```bash
 # HTTP (local only)
 python groq_bridge.py
-
+ 
 # Or use the launch script
 bash start.sh
 ```
-
+ 
 Open `http://localhost:5000` in your browser.
-
+ 
 ---
-
+ 
 ## 🔒 HTTPS / Remote Access (Optional)
-
+ 
 For mobile access or cross-device use, the server supports HTTPS via [Tailscale](https://tailscale.com/):
-
+ 
 1. Install Tailscale and enable HTTPS certificates for your machine
-2. Update the cert paths in `groq_bridge.py` to match your Tailscale hostname
-3. Run the server — it will auto-copy certs to `~/.companion_certs/` and serve over HTTPS
-
+2. Set `TAILSCALE_HOSTNAME=your-machine.your-tailnet.ts.net` in your `.env`
+3. Run the server — it will auto-copy certs to `~/.ava_certs/` and serve over HTTPS
 You can then access the companion from any device on your Tailscale network.
-
+ 
 ---
-
+ 
 ## 🎭 Animations
-
+ 
 Animations are BVH files sourced from [Mixamo](https://www.mixamo.com/) and converted using [XR Animator](https://xr-animator.web.app/). Place BVH files in `assets/animations/`.
-
+ 
 To add a new animation, update **three places** in `groq_bridge.py` and `webui.html`:
-
+ 
 1. `VALID_ANIMATIONS` list in `groq_bridge.py`
 2. `PANEL_ANIMATIONS` array in `webui.html`
 3. `curatedAnimations` array in `webui.html`
-
 ---
-
+ 
 ## 🧠 Models Used (Groq API defaults)
-
+ 
 | Role | Model |
 |---|---|
 | Chat / Reasoning | `openai/gpt-oss-120b` |
@@ -135,34 +129,33 @@ To add a new animation, update **three places** in `groq_bridge.py` and `webui.h
 | TTS | `canopylabs/orpheus-v1-english` |
 | STT | `whisper-large-v3` |
 | Title generation | `llama-3.1-8b-instant` |
-
+ 
 All models are swappable — edit the model ID constants at the top of `groq_bridge.py`.
-
+ 
 ---
-
+ 
 ## 🔧 Customization
-
+ 
 **Change the companion's persona** — edit the `system_prompt` in the `/chat` route in `groq_bridge.py`.
-
+ 
 **Change the voice** — update the `voice` parameter in `generate_speech()`. Orpheus voices: `tara`, `leah`, `jess`, `leo`, `dan`, `mia`, `zac`, `zoe`, `autumn`.
-
+ 
 **Add new emotions** — add blend shape targets to the VRM expression map in `webui.html`.
-
+ 
 **Swap the LLM backend** — the Groq client is OpenAI-compatible. Point it at Ollama, LM Studio, or any local inference server by changing the `base_url`.
-
+ 
 ---
-
+ 
 ## 📋 Requirements
-
+ 
 - Python 3.10+
 - A modern browser (Chrome recommended for best WebGL/AudioContext support)
 - Groq API key (free tier works for development)
 - A VRM 1.0 character file
-
 ---
-
+ 
 ## 🙏 Credits & Inspirations
-
+ 
 | Project | What it contributed |
 |---|---|
 | [ChatVRM / pixiv](https://github.com/pixiv/ChatVRM) | Original VRM + LLM chat concept |
