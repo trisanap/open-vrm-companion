@@ -1,0 +1,3072 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, user-scalable=no"
+        />
+        <title>VRM Companion</title>
+        <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌸</text></svg>" />
+        <style>
+            :root {
+                --glass: rgba(20, 20, 20, 0.85);
+                --glass-hover: rgba(40, 40, 40, 0.95);
+                --border: rgba(255, 255, 255, 0.12);
+                --highlight: #5b9bd5;
+                --accent-glow: rgba(91, 155, 213, 0.3);
+                --text-main: #ececec;
+                --text-muted: #888;
+            }
+            body {
+                margin: 0;
+                overflow: hidden;
+                background-color: #050505;
+                font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+            }
+            canvas {
+                display: block;
+            }
+
+            /* HUD Styling */
+            #hud-top-left {
+                position: fixed;
+                top: 25px;
+                left: 25px;
+                z-index: 1000;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .neural-status {
+                background: rgba(10, 10, 10, 0.6);
+                backdrop-filter: blur(16px);
+                padding: 14px 20px;
+                border-radius: 12px;
+                border: 1px solid var(--border);
+                border-left: 4px solid var(--highlight);
+                color: white;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            }
+            #status-indicator {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                margin-top: 5px;
+                color: var(--text-muted);
+            }
+            #status-indicator.processing {
+                color: var(--highlight);
+                animation: pulse 1.5s infinite;
+            }
+            @keyframes pulse {
+                0% {
+                    opacity: 0.5;
+                }
+                50% {
+                    opacity: 1;
+                }
+                100% {
+                    opacity: 0.5;
+                }
+            }
+
+            /* Chat Layout */
+            #chat-container {
+                position: fixed;
+                bottom: 150px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 90%;
+                max-width: 750px;
+                max-height: 40vh;
+                display: flex;
+                flex-direction: column;
+                z-index: 100;
+                pointer-events: none;
+                /* visibility + opacity lets us animate out AND be truly non-interactive */
+                visibility: visible;
+                opacity: 1;
+                transition:
+                    opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                    visibility 0s linear 0s;
+            }
+            #chat-container.collapsed {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px) scale(0.95);
+                pointer-events: none;
+                /* visibility hidden kicks in AFTER the opacity transition finishes (0.3s delay) */
+                visibility: hidden;
+                transition:
+                    opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                    visibility 0s linear 0.3s;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            #chat-log {
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+                overflow-y: auto;
+                padding: 15px;
+                pointer-events: auto;
+                scrollbar-width: none;
+            }
+            #chat-container.collapsed #chat-log {
+                pointer-events: none;
+            }
+            #chat-log::-webkit-scrollbar {
+                display: none;
+            }
+
+            .message {
+                padding: 14px 20px;
+                border-radius: 16px;
+                font-size: 15px;
+                line-height: 1.6;
+                backdrop-filter: blur(20px);
+                animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                border: 1px solid var(--border);
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+                max-width: 85%;
+            }
+            @keyframes slideIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(15px) scale(0.98);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                }
+            }
+
+            .user-message {
+                align-self: flex-end;
+                background: rgba(91, 155, 213, 0.12);
+                color: #e0eeff;
+                border-bottom-right-radius: 4px;
+                border-right: 3px solid var(--highlight);
+            }
+            .ava-wrapper {
+                display: flex;
+                align-items: flex-end;
+                gap: 12px;
+                align-self: flex-start;
+                width: 100%;
+            }
+            .ava-avatar {
+                width: 38px;
+                height: 38px;
+                border-radius: 50%;
+                border: 2px solid rgba(255, 255, 255, 0.2);
+                flex-shrink: 0;
+                background: linear-gradient(135deg, #5b9bd5 0%, #a78bfa 100%);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 18px;
+            }
+            .ava-message {
+                background: rgba(30, 30, 30, 0.6);
+                color: #fff;
+                border-bottom-left-radius: 4px;
+                border-left: 3px solid #aaa;
+            }
+
+            /* Typing indicator dots */
+            .typing-indicator {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                padding: 14px 20px;
+                height: 24px;
+            }
+            .typing-indicator span {
+                width: 7px;
+                height: 7px;
+                background: rgba(255, 255, 255, 0.5);
+                border-radius: 50%;
+                display: inline-block;
+                animation: typingBounce 1.2s infinite ease-in-out;
+            }
+            .typing-indicator span:nth-child(1) {
+                animation-delay: 0s;
+            }
+            .typing-indicator span:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+            .typing-indicator span:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+            @keyframes typingBounce {
+                0%,
+                60%,
+                100% {
+                    transform: translateY(0);
+                    opacity: 0.4;
+                }
+                30% {
+                    transform: translateY(-6px);
+                    opacity: 1;
+                }
+            }
+            #composer {
+                position: fixed;
+                bottom: 25px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 90%;
+                max-width: 750px;
+                background: var(--glass);
+                backdrop-filter: blur(24px);
+                border-radius: 24px;
+                border: 1px solid var(--border);
+                padding: 12px 16px;
+                display: flex;
+                flex-direction: column;
+                z-index: 1000;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+                transition:
+                    box-shadow 0.3s,
+                    border 0.3s;
+            }
+            #composer:focus-within {
+                border-color: rgba(91, 155, 213, 0.5);
+                box-shadow:
+                    0 12px 40px rgba(0, 0, 0, 0.7),
+                    0 0 20px var(--accent-glow);
+            }
+
+            .preview-container {
+                display: none;
+                position: relative;
+                margin-bottom: 10px;
+                width: max-content;
+            }
+            #imagePreview {
+                height: 64px;
+                border-radius: 8px;
+                object-fit: cover;
+                border: 1px solid var(--border);
+            }
+            .clear-preview {
+                position: absolute;
+                top: -8px;
+                right: -8px;
+                background: #333;
+                color: white;
+                border: 1px solid var(--border);
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                font-size: 12px;
+                padding: 0;
+            }
+            .clear-preview:hover {
+                background: #555;
+            }
+
+            #userInput {
+                width: 100%;
+                background: transparent;
+                border: none;
+                color: var(--text-main);
+                font-size: 16px;
+                line-height: 1.5;
+                resize: none;
+                outline: none;
+                padding: 4px 0 12px 0;
+                max-height: 150px;
+                font-family: inherit;
+            }
+            #userInput::placeholder {
+                color: var(--text-muted);
+            }
+
+            .composer-toolbar {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-top: 1px solid rgba(255, 255, 255, 0.05);
+                padding-top: 8px;
+                gap: 6px;
+                min-width: 0;
+            }
+            .toolbar-left {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                overflow-x: auto;
+                overflow-y: visible;
+                scrollbar-width: none;
+                flex: 1 1 0;
+                min-width: 0;
+                -webkit-mask-image: linear-gradient(
+                    to right,
+                    black 80%,
+                    transparent 100%
+                );
+                mask-image: linear-gradient(
+                    to right,
+                    black 80%,
+                    transparent 100%
+                );
+            }
+            .toolbar-left::-webkit-scrollbar {
+                display: none;
+            }
+
+            .icon-btn {
+                background: transparent;
+                border: none;
+                color: var(--text-muted);
+                width: 34px;
+                height: 34px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.2s;
+                flex-shrink: 0;
+            }
+            .icon-btn:hover {
+                background: rgba(255, 255, 255, 0.1);
+                color: var(--text-main);
+            }
+            .icon-btn.active {
+                color: var(--highlight);
+            }
+            .icon-btn svg {
+                width: 20px;
+                height: 20px;
+                fill: currentColor;
+            }
+
+            /* Styled Selects */
+            .select-wrapper {
+                position: relative;
+            }
+            .toolbar-select {
+                appearance: none;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid transparent;
+                color: var(--text-muted);
+                padding: 6px 28px 6px 12px;
+                border-radius: 16px;
+                font-size: 13px;
+                cursor: pointer;
+                transition: all 0.2s;
+                outline: none;
+            }
+            .toolbar-select:hover {
+                background: rgba(255, 255, 255, 0.1);
+                color: var(--text-main);
+            }
+            .select-wrapper::after {
+                content: "▼";
+                font-size: 9px;
+                color: var(--text-muted);
+                position: absolute;
+                right: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                pointer-events: none;
+            }
+
+            #sendTextBtn {
+                background: var(--highlight);
+                color: white;
+                border: none;
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            #sendTextBtn:hover {
+                background: #4a84b8;
+                transform: scale(1.05);
+            }
+            #sendTextBtn:active {
+                transform: scale(0.95);
+            }
+            #sendTextBtn:disabled {
+                background: rgba(91, 155, 213, 0.3);
+                cursor: not-allowed;
+                transform: none;
+                pointer-events: none;
+            }
+            #sendTextBtn svg {
+                width: 16px;
+                height: 16px;
+                fill: white;
+                margin-left: 2px;
+            }
+
+            /* Loading Overlay */
+            #loading-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: #000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 9999;
+                color: white;
+                transition: opacity 0.8s;
+            }
+            #loading-overlay.hidden {
+                opacity: 0;
+                pointer-events: none;
+            }
+            .spinner {
+                width: 40px;
+                height: 40px;
+                border: 3px solid rgba(255, 255, 255, 0.1);
+                border-top: 3px solid var(--highlight);
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-right: 20px;
+            }
+            @keyframes spin {
+                0% {
+                    transform: rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+
+            /* Mic recording pulse */
+            @keyframes micPulse {
+                0% {
+                    box-shadow: 0 0 0 0 rgba(220, 60, 60, 0.5);
+                }
+                70% {
+                    box-shadow: 0 0 0 8px rgba(220, 60, 60, 0);
+                }
+                100% {
+                    box-shadow: 0 0 0 0 rgba(220, 60, 60, 0);
+                }
+            }
+            .icon-btn.recording {
+                color: #dc3c3c !important;
+                animation: micPulse 1.2s ease-out infinite;
+            }
+
+            #agentModeBtn {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                padding: 6px 10px;
+                border-radius: 10px;
+                background: rgba(167, 139, 250, 0.12);
+                border: 1px solid rgba(167, 139, 250, 0.3);
+                color: #a78bfa;
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+                cursor: pointer;
+                transition: all 0.18s;
+                flex-shrink: 0;
+                white-space: nowrap;
+            }
+            #agentModeBtn:hover {
+                background: rgba(167, 139, 250, 0.22);
+                box-shadow: 0 0 12px rgba(167, 139, 250, 0.2);
+            }
+            #agentModeBtn .agent-dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: #a78bfa;
+                animation: pulse 1.8s ease-in-out infinite;
+            }
+            /* ── Settings Panel ─────────────────────────────── */
+            #settings-backdrop {
+                position: fixed;
+                inset: 0;
+                z-index: 1900;
+                background: transparent;
+                display: none;
+            }
+            #settings-backdrop.open {
+                display: block;
+            }
+
+            #settings-panel {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 300px;
+                height: 100vh;
+                z-index: 2000;
+                background: rgba(10, 10, 12, 0.92);
+                backdrop-filter: blur(28px);
+                border-right: 1px solid var(--border);
+                display: flex;
+                transform: translateX(-100%);
+                transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+                box-shadow: 8px 0 40px rgba(0, 0, 0, 0.6);
+            }
+            #settings-panel.open {
+                transform: translateX(0);
+            }
+
+            /* Vertical tab strip */
+            .settings-tabs {
+                width: 56px;
+                flex-shrink: 0;
+                border-right: 1px solid var(--border);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 16px 0;
+                gap: 6px;
+            }
+            .stab {
+                width: 40px;
+                height: 40px;
+                border-radius: 10px;
+                border: none;
+                background: transparent;
+                color: var(--text-muted);
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.18s;
+                font-size: 18px;
+            }
+            .stab:hover {
+                background: rgba(255, 255, 255, 0.07);
+                color: var(--text-main);
+            }
+            .stab.active {
+                background: rgba(91, 155, 213, 0.18);
+                color: var(--highlight);
+            }
+
+            /* Tab content area */
+            .settings-content {
+                flex: 1;
+                overflow-y: auto;
+                padding: 20px 16px;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+            }
+            .settings-content::-webkit-scrollbar {
+                width: 4px;
+            }
+            .settings-content::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 2px;
+            }
+
+            .stab-pane {
+                display: none;
+            }
+            .stab-pane.active {
+                display: block;
+            }
+
+            .settings-title {
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                color: var(--text-muted);
+                margin: 0 0 14px 0;
+            }
+            .settings-section {
+                margin-bottom: 24px;
+            }
+            .settings-section-label {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                color: var(--highlight);
+                opacity: 0.7;
+                margin-bottom: 8px;
+            }
+
+            /* Animation cards grid */
+            .anim-grid {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            .anim-card {
+                padding: 9px 12px;
+                border-radius: 8px;
+                border: 1px solid transparent;
+                background: rgba(255, 255, 255, 0.03);
+                color: var(--text-main);
+                font-size: 13px;
+                cursor: pointer;
+                transition: all 0.15s;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                text-align: left;
+                width: 100%;
+            }
+            .anim-card:hover {
+                background: rgba(91, 155, 213, 0.12);
+                border-color: rgba(91, 155, 213, 0.3);
+                color: #fff;
+            }
+            .anim-card:active {
+                transform: scale(0.98);
+            }
+            .anim-card .anim-dot {
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                flex-shrink: 0;
+            }
+            .anim-dot.action {
+                background: #5b9bd5;
+            }
+            .anim-dot.dance {
+                background: #b45bd5;
+            }
+            .anim-dot.reaction {
+                background: #5bd58a;
+            }
+            .anim-dot.idle {
+                background: #888;
+            }
+
+            /* Background / time-of-day palette */
+            .bg-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+            }
+            .bg-swatch {
+                border-radius: 8px;
+                aspect-ratio: 16/9;
+                cursor: pointer;
+                border: 2px solid transparent;
+                transition: all 0.18s;
+                position: relative;
+                overflow: hidden;
+            }
+            .bg-swatch:hover {
+                transform: scale(1.04);
+                border-color: rgba(255, 255, 255, 0.3);
+            }
+            .bg-swatch.active {
+                border-color: var(--highlight);
+            }
+            .bg-swatch-label {
+                position: absolute;
+                bottom: 4px;
+                left: 0;
+                right: 0;
+                text-align: center;
+                font-size: 9px;
+                text-transform: uppercase;
+                letter-spacing: 0.8px;
+                color: rgba(255, 255, 255, 0.7);
+                text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+            }
+
+            .about-logo {
+                font-size: 32px;
+                font-weight: 800;
+                letter-spacing: -1px;
+                color: #fff;
+                margin-bottom: 4px;
+            }
+            .about-version {
+                font-size: 11px;
+                color: var(--highlight);
+                letter-spacing: 1px;
+                margin-bottom: 16px;
+            }
+            .about-divider {
+                border: none;
+                border-top: 1px solid var(--border);
+                margin: 16px 0;
+            }
+            .about-row {
+                display: flex;
+                justify-content: space-between;
+                font-size: 12px;
+                color: var(--text-muted);
+                margin-bottom: 8px;
+            }
+            .about-row span:last-child {
+                color: var(--text-main);
+            }
+            .about-disclaimer {
+                font-size: 11px;
+                color: var(--text-muted);
+                line-height: 1.6;
+                margin-top: 16px;
+            }
+        </style>
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+                    "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@3.0.0/lib/three-vrm.module.js"
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <div id="loading-overlay">
+            <div class="spinner"></div>
+            <div id="loading-text">Loading Companion...</div>
+        </div>
+
+        <!-- HUD -->
+        <div id="hud-top-left">
+            <div class="neural-status">
+                <div style="font-size: 10px; opacity: 0.7; letter-spacing: 1px">
+                    NEURAL STATE
+                </div>
+                <div
+                    id="ava-mood-display"
+                    style="
+                        font-size: 15px;
+                        font-weight: bold;
+                        margin-top: 4px;
+                        color: #fff;
+                    "
+                >
+                    NEUTRAL
+                </div>
+                <div id="status-indicator">Standby</div>
+            </div>
+        </div>
+
+        <!-- Chat Bubbles -->
+        <div id="chat-container"><div id="chat-log"></div></div>
+
+        <!-- Settings Backdrop (click-outside to close) -->
+        <div id="settings-backdrop" onclick="closeSettings()"></div>
+
+        <!-- Settings Panel -->
+        <div id="settings-panel">
+            <!-- Vertical tab strip -->
+            <div class="settings-tabs">
+                <button
+                    class="stab active"
+                    id="stab-anim"
+                    title="Animations"
+                    onclick="switchTab('anim')"
+                >
+                    🎬
+                </button>
+
+                <button
+                    class="stab"
+                    id="stab-bg"
+                    title="Background"
+                    onclick="switchTab('bg')"
+                >
+                    🌅
+                </button>
+                <button
+                    class="stab"
+                    id="stab-config"
+                    title="Config"
+                    onclick="switchTab('config')"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        width="15"
+                        height="15"
+                        fill="currentColor"
+                    >
+                        <path
+                            d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"
+                        />
+                    </svg>
+                </button>
+                <button
+                    class="stab"
+                    id="stab-about"
+                    title="About"
+                    onclick="switchTab('about')"
+                >
+                    ✦
+                </button>
+            </div>
+
+            <!-- Tab content -->
+            <div class="settings-content">
+                <!-- ── ANIMATIONS ── -->
+                <div class="stab-pane active" id="pane-anim">
+                    <div class="settings-title">Animations</div>
+
+                    <div class="settings-section">
+                        <div class="settings-section-label">Action</div>
+                        <div class="anim-grid" id="anim-group-action"></div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-label">Dance</div>
+                        <div class="anim-grid" id="anim-group-dance"></div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-label">Reaction</div>
+                        <div class="anim-grid" id="anim-group-reaction"></div>
+                    </div>
+                    <div class="settings-section">
+                        <div class="settings-section-label">Idle</div>
+                        <div class="anim-grid" id="anim-group-idle"></div>
+                    </div>
+                </div>
+
+                <!-- ── BACKGROUND ── -->
+                <div class="stab-pane" id="pane-bg">
+                    <div class="settings-title">Background</div>
+
+                    <div class="settings-section">
+                        <div class="settings-section-label">Custom Color</div>
+                        <div
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 10px;
+                                margin-top: 4px;
+                            "
+                        >
+                            <input
+                                type="color"
+                                id="bgColorPicker"
+                                value="#c8d8e8"
+                                style="
+                                    width: 44px;
+                                    height: 36px;
+                                    border: 1px solid var(--border);
+                                    border-radius: 8px;
+                                    background: transparent;
+                                    cursor: pointer;
+                                    padding: 2px;
+                                "
+                                oninput="setBgCustomColor(this.value)"
+                            />
+                            <span
+                                style="
+                                    font-size: 12px;
+                                    color: var(--text-muted);
+                                "
+                                >Pick any color</span
+                            >
+                        </div>
+                        <div style="margin-top: 8px">
+                            <button
+                                class="anim-card"
+                                style="justify-content: center; font-size: 12px"
+                                onclick="setBgDefault()"
+                            >
+                                ↺ Reset to default
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="settings-section-label">Scene</div>
+                        <button
+                            class="anim-card"
+                            id="gridToggleBtn"
+                            onclick="toggleFloorGrid()"
+                            style="gap: 10px"
+                        >
+                            <span id="gridToggleIcon">▣</span>
+                            <span id="gridToggleLabel">Show Floor Grid</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ── CONFIG ── -->
+                <div class="stab-pane" id="pane-config">
+                    <div class="settings-title">Config</div>
+
+                    <div class="settings-section">
+                        <div class="settings-section-label">Voice Speed</div>
+                        <div
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 10px;
+                                margin-top: 6px;
+                            "
+                        >
+                            <input
+                                type="range"
+                                id="cfg-speed"
+                                min="0.7"
+                                max="1.3"
+                                step="0.05"
+                                value="1.0"
+                                style="flex: 1; accent-color: var(--highlight)"
+                                oninput="
+                                    document.getElementById(
+                                        'cfg-speed-val',
+                                    ).textContent = parseFloat(
+                                        this.value,
+                                    ).toFixed(2)
+                                "
+                            />
+                            <span
+                                id="cfg-speed-val"
+                                style="
+                                    font-size: 12px;
+                                    color: var(--text-muted);
+                                    min-width: 32px;
+                                "
+                                >1.00</span
+                            >
+                        </div>
+                        <div
+                            style="
+                                font-size: 11px;
+                                color: var(--text-muted);
+                                margin-top: 4px;
+                            "
+                        >
+                            Applies on next message. Neutral baseline is 1.00.
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="settings-section-label">
+                            Memory Interval
+                        </div>
+                        <div
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 10px;
+                                margin-top: 6px;
+                            "
+                        >
+                            <input
+                                type="range"
+                                id="cfg-meminterval"
+                                min="1"
+                                max="20"
+                                step="1"
+                                value="5"
+                                style="flex: 1; accent-color: var(--highlight)"
+                                oninput="
+                                    document.getElementById(
+                                        'cfg-meminterval-val',
+                                    ).textContent = this.value
+                                "
+                            />
+                            <span
+                                id="cfg-meminterval-val"
+                                style="
+                                    font-size: 12px;
+                                    color: var(--text-muted);
+                                    min-width: 24px;
+                                "
+                                >5</span
+                            >
+                        </div>
+                        <div
+                            style="
+                                font-size: 11px;
+                                color: var(--text-muted);
+                                margin-top: 4px;
+                            "
+                        >
+                            Messages between memory consolidations.
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="settings-section-label">
+                            Auto-Idle Animations
+                        </div>
+                        <label
+                            style="
+                                display: flex;
+                                align-items: center;
+                                gap: 10px;
+                                margin-top: 6px;
+                                cursor: pointer;
+                            "
+                        >
+                            <input
+                                type="checkbox"
+                                id="cfg-autoidle"
+                                checked
+                                style="
+                                    width: 16px;
+                                    height: 16px;
+                                    accent-color: var(--highlight);
+                                "
+                            />
+                            <span
+                                style="font-size: 13px; color: var(--text-main)"
+                                >Enable idle variety</span
+                            >
+                        </label>
+                        <div
+                            style="
+                                font-size: 11px;
+                                color: var(--text-muted);
+                                margin-top: 4px;
+                            "
+                        >
+                            Randomly cycles idle animations when she's not
+                            talking.
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="settings-section-label">Clear Memory</div>
+                        <button
+                            class="anim-card"
+                            id="cfg-clearmem-btn"
+                            style="
+                                justify-content: center;
+                                font-size: 12px;
+                                margin-top: 6px;
+                                color: #e07070;
+                            "
+                            onclick="confirmClearMemory()"
+                        >
+                            ✕ Clear conversation memory
+                        </button>
+                        <div
+                            style="
+                                font-size: 11px;
+                                color: var(--text-muted);
+                                margin-top: 4px;
+                            "
+                        >
+                            Wipes memory.json. Persistent facts are kept.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── ABOUT ── -->
+                <div class="stab-pane" id="pane-about">
+                    <div class="about-logo">VRM Companion</div>
+                    <div class="about-version">v1.0</div>
+                    <hr class="about-divider" />
+                    <div class="about-row">
+                        <span>Model</span><span>GPT OSS 120B</span>
+                    </div>
+                    <div class="about-row">
+                        <span>Voice</span><span>Orpheus · Autumn</span>
+                    </div>
+                    <div class="about-row">
+                        <span>Vision</span><span>Llama 4 Scout</span>
+                    </div>
+                    <div class="about-row">
+                        <span>STT</span><span>Whisper Large v3</span>
+                    </div>
+                    <div class="about-row">
+                        <span>Avatar</span><span>VRM1 · Three.js</span>
+                    </div>
+                    <hr class="about-divider" />
+                    <div class="about-disclaimer">
+                        Your AI companion has memory, personality, and opinions
+                        — but is not a real person.<br /><br />
+                        Open VRM Companion · MIT License
+                    </div>
+                    <hr class="about-divider" />
+                    <div
+                        style="
+                            cursor: pointer;
+                            user-select: none;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            font-size: 11px;
+                            color: var(--text-muted);
+                        "
+                        onclick="toggleDebug()"
+                    >
+                        <span id="debugToggleIcon">▶</span>
+                        <span>Developer</span>
+                    </div>
+                    <div
+                        id="debug-panel"
+                        style="
+                            display: none;
+                            margin-top: 12px;
+                            font-size: 11px;
+                            font-family: monospace;
+                            color: var(--text-muted);
+                            line-height: 1.9;
+                        "
+                    >
+                        <div>
+                            Animation:
+                            <span id="dbg-anim" style="color: var(--text-main)"
+                                >—</span
+                            >
+                        </div>
+                        <div>
+                            Expression:
+                            <span id="dbg-expr" style="color: var(--text-main)"
+                                >—</span
+                            >
+                        </div>
+                        <div>
+                            Idle state:
+                            <span id="dbg-idle" style="color: var(--text-main)"
+                                >—</span
+                            >
+                        </div>
+                        <div>
+                            Idle timer:
+                            <span
+                                id="dbg-idletimer"
+                                style="color: var(--text-main)"
+                                >—</span
+                            >
+                        </div>
+                        <div>
+                            Callout:
+                            <span
+                                id="dbg-autooutfit"
+                                style="color: var(--text-main)"
+                                >—</span
+                            >
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="composer">
+            <div class="preview-container" id="previewContainer">
+                <img id="imagePreview" alt="Preview" />
+                <button class="clear-preview" onclick="clearImagePreview()">
+                    ×
+                </button>
+            </div>
+
+            <textarea
+                id="userInput"
+                rows="1"
+                placeholder="Message your companion..."
+                maxlength="1000"
+            ></textarea>
+
+            <div class="composer-toolbar">
+                <div class="toolbar-left">
+                    <input
+                        type="file"
+                        id="imageInput"
+                        accept="image/*"
+                        style="display: none"
+                    />
+                    <button
+                        class="icon-btn"
+                        title="Upload Image"
+                        onclick="document.getElementById('imageInput').click()"
+                    >
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"
+                            />
+                        </svg>
+                    </button>
+
+                    <button
+                        class="icon-btn"
+                        id="micBtn"
+                        title="Hold to speak"
+                        onclick="toggleMic()"
+                    >
+                        <svg id="micIcon" viewBox="0 0 24 24">
+                            <path
+                                d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.39-.9.88C17.01 14.12 14.73 16 12 16s-5.01-1.88-5.01-4.12c0-.49-.41-.88-.9-.88s-.89.39-.89.88c0 3.12 2.37 5.75 5.3 6.18V20h3v-1.94c2.93-.43 5.3-3.06 5.3-6.18 0-.49-.4-.88-.89-.88z"
+                            />
+                        </svg>
+                    </button>
+
+                    <button
+                        class="icon-btn"
+                        id="ttsMuteBtn"
+                        title="Mute voice"
+                        onclick="toggleTtsMute()"
+                    >
+                        <svg id="ttsMuteIcon" viewBox="0 0 24 24">
+                            <path
+                                d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
+                            />
+                        </svg>
+                    </button>
+
+                    <button
+                        class="icon-btn active"
+                        id="toggleChatBtn"
+                        title="Toggle Chat History"
+                        onclick="toggleChat()"
+                    >
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"
+                            />
+                        </svg>
+                    </button>
+
+                    <button
+                        class="icon-btn"
+                        id="settingsBtn"
+                        title="Settings"
+                        onclick="toggleSettings()"
+                    >
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"
+                            />
+                        </svg>
+                    </button>
+
+                    <button
+                        id="agentModeBtn"
+                        onclick="enterAgentMode()"
+                        title="Switch to Agent Mode"
+                    >
+                        <div class="agent-dot"></div>
+                        Agent
+                    </button>
+
+                    <button
+                        class="icon-btn"
+                        id="resetCameraBtn"
+                        title="Reset Camera"
+                        onclick="resetCamera()"
+                    >
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm-7 7H3v4h4v-2H5v-2zm14 0v2h-2v2h4v-4h-2zM5 5h2V3H3v4h2V5zm14 0v2h2V3h-4v2h2z"
+                            />
+                        </svg>
+                    </button>
+
+                    <button
+                        class="icon-btn"
+                        id="repositionBtn"
+                        title="Reposition Character"
+                        onclick="window.repositionCharacter()"
+                    >
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M12 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-1 5h2a1 1 0 0 1 1 1v5h1.5a.5.5 0 0 1 0 1H15v5a1 1 0 0 1-2 0v-5h-2v5a1 1 0 0 1-2 0v-5H7.5a.5.5 0 0 1 0-1H9V8a1 1 0 0 1 1-1z"
+                            />
+                        </svg>
+                    </button>
+                </div>
+
+                <div
+                    class="toolbar-right"
+                    style="
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        flex-shrink: 0;
+                    "
+                >
+                    <span
+                        id="charCounter"
+                        style="
+                            font-size: 12px;
+                            color: var(--text-muted);
+                            min-width: 28px;
+                            text-align: right;
+                        "
+                    ></span>
+                    <button id="sendTextBtn" title="Send Message">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <audio id="audioPlayer" style="display: none"></audio>
+        <audio id="musicPlayer" style="display: none"></audio>
+
+        <script type="module">
+            import * as THREE from "three";
+            import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+            import { BVHLoader } from "three/addons/loaders/BVHLoader.js";
+            import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+            import { VRMLoaderPlugin, VRMUtils } from "@pixiv/three-vrm";
+
+            let scene,
+                camera,
+                renderer,
+                clock,
+                mixer,
+                controls, // module-scoped so resetCamera() can reach it
+                currentVrm = null,
+                currentAction;
+            let isFirstLoad = true;
+            let currentAnimKey = "idle_1";
+            const assetPathPrefix = "/assets/";
+            const animationsMap = new Map();
+            const audioPlayer = document.getElementById("audioPlayer");
+            const musicPlayer = document.getElementById("musicPlayer");
+            const statusIndicator = document.getElementById("status-indicator");
+            let audioFadeInterval;
+
+            // Default camera position — used by resetCamera()
+            const CAM_POS = new THREE.Vector3(0, 1.65, 2.5);
+            const CAM_TARGET = new THREE.Vector3(0, 1.25, 0);
+            let cameraResetting = false;
+
+            window.enterAgentMode = function () {
+                window.location.href = "/agent-mode";
+            };
+
+            // Blinking Variables
+            let blinkTimer = 0;
+            let nextBlinkDelay = 2 + Math.random() * 4;
+            const blinkDuration = 0.15;
+
+            // Smoothed Lip Sync Variables
+            let targetMouthOpen = 0;
+            let currentMouthOpen = 0;
+            let lastMouthUpdate = 0;
+
+            // Ambient Idle Variety — rotates through all available idle BVHs
+            const IDLE_VARIANTS = [
+                "idle_1",
+                "idle_3",
+                "idle_4",
+                "idle_arm_swing",
+                "idle_fit_check",
+                "idle_feminine",
+            ];
+            let idleVariantTimer = 0;
+            let nextIdleSwitch = 18 + Math.random() * 20; // Switch every 18–38 seconds
+            let isInIdleState = true;
+
+            // Autonomous callout after 8 min of continuous idle
+            let autoCalloutTimer = 0;
+            const AUTO_CALLOUT_SECS = 8 * 60;
+            let autoCalloutFired = false; // fires once per idle session
+
+            // ── BACKGROUND SYSTEM ─────────────────────────────────────────
+            const BG_DEFAULT_HEX = "#c8d8e8"; // Morning blue — permanent default
+
+            function applyBgHex(hex) {
+                if (scene) {
+                    scene.background = new THREE.Color(hex);
+                    scene.environment = null;
+                }
+                document.body.style.transition = "background-color 1s ease";
+                document.body.style.backgroundColor = hex;
+                const p = document.getElementById("bgColorPicker");
+                if (p) p.value = hex;
+            }
+
+            window.setBgDefault = () => applyBgHex(BG_DEFAULT_HEX);
+            window.setBgCustomColor = (hex) => applyBgHex(hex);
+
+            // Floor grid
+            let floorGrid = null;
+            let floorGridVisible = false;
+            function getOrCreateFloorGrid() {
+                if (floorGrid) return floorGrid;
+                floorGrid = new THREE.GridHelper(10, 20, 0x444444, 0x222222);
+                floorGrid.position.y = 0;
+                floorGrid.visible = false;
+                scene.add(floorGrid);
+                return floorGrid;
+            }
+            window.toggleFloorGrid = function () {
+                const grid = getOrCreateFloorGrid();
+                floorGridVisible = !floorGridVisible;
+                grid.visible = floorGridVisible;
+                document.getElementById("gridToggleLabel").textContent =
+                    floorGridVisible ? "Hide Floor Grid" : "Show Floor Grid";
+                document.getElementById("gridToggleBtn").style.color =
+                    floorGridVisible ? "var(--highlight)" : "";
+            };
+
+            // ── RESET CAMERA ──────────────────────────────────────────────
+            window.resetCamera = function () {
+                cameraResetting = true;
+                document
+                    .getElementById("resetCameraBtn")
+                    .classList.add("active");
+            };
+
+            // ── SETTINGS PANEL LOGIC ─────────────────────────────────────
+            window.toggleSettings = function () {
+                const panel = document.getElementById("settings-panel");
+                const backdrop = document.getElementById("settings-backdrop");
+                const btn = document.getElementById("settingsBtn");
+                const isOpen = panel.classList.contains("open");
+                panel.classList.toggle("open", !isOpen);
+                backdrop.classList.toggle("open", !isOpen);
+                btn.classList.toggle("active", !isOpen);
+            };
+            window.closeSettings = function () {
+                document
+                    .getElementById("settings-panel")
+                    .classList.remove("open");
+                document
+                    .getElementById("settings-backdrop")
+                    .classList.remove("open");
+                document
+                    .getElementById("settingsBtn")
+                    .classList.remove("active");
+            };
+
+            window.confirmClearMemory = async function () {
+                const btn = document.getElementById("cfg-clearmem-btn");
+                if (btn.dataset.confirm !== "yes") {
+                    btn.textContent = "Tap again to confirm";
+                    btn.dataset.confirm = "yes";
+                    setTimeout(() => {
+                        btn.textContent = "✕ Clear conversation memory";
+                        btn.dataset.confirm = "";
+                    }, 3000);
+                    return;
+                }
+                try {
+                    const res = await fetch("/clear_memory", {
+                        method: "POST",
+                    });
+                    btn.textContent = res.ok ? "Cleared!" : "Failed";
+                    btn.dataset.confirm = "";
+                    setTimeout(() => {
+                        btn.textContent = "✕ Clear conversation memory";
+                    }, 2000);
+                } catch (e) {
+                    btn.textContent = "Error — check console";
+                }
+            };
+
+            window.getAutoIdleEnabled = () =>
+                document.getElementById("cfg-autoidle")?.checked ?? true;
+
+            let debugVisible = false;
+            window.toggleDebug = function () {
+                debugVisible = !debugVisible;
+                document.getElementById("debug-panel").style.display =
+                    debugVisible ? "block" : "none";
+                document.getElementById("debugToggleIcon").textContent =
+                    debugVisible ? "▼" : "▶";
+            };
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") window.closeSettings();
+            });
+
+            window.switchTab = function (tab) {
+                document
+                    .querySelectorAll(".stab")
+                    .forEach((b) => b.classList.remove("active"));
+                document
+                    .querySelectorAll(".stab-pane")
+                    .forEach((p) => p.classList.remove("active"));
+                document.getElementById("stab-" + tab).classList.add("active");
+                document.getElementById("pane-" + tab).classList.add("active");
+            };
+
+            // ── BUILD ANIMATION CARDS ────────────────────────────────────
+            const PANEL_ANIMATIONS = [
+                { key: "action_greeting", label: "Greeting", group: "action" },
+                { key: "action_jump", label: "Jump", group: "action" },
+                { key: "action_catwalk", label: "Catwalk", group: "action" },
+                { key: "action_jogging", label: "Jogging", group: "action" },
+                { key: "action_running", label: "Running", group: "action" },
+                { key: "action_walking", label: "Walking", group: "action" },
+                { key: "action_listening_music", label: "Listening Music", group: "action" },
+                { key: "action_peace_cute", label: "Peace Cute", group: "action" },
+                { key: "action_spin_tada", label: "Spin Tada", group: "action" },
+                { key: "dance_aiba", label: "Aiba", group: "dance" },
+                { key: "dance_samba", label: "Samba", group: "dance" },
+                { key: "dance_silly", label: "Silly", group: "dance" },
+                { key: "dance_soul_spin", label: "Soul Spin", group: "dance" },
+                { key: "idle_1", label: "Breathing", group: "idle" },
+                { key: "idle_3", label: "Happy", group: "idle" },
+                { key: "idle_4", label: "Relaxed", group: "idle" },
+                { key: "idle_arm_swing", label: "Arm Swing", group: "idle" },
+                { key: "idle_bored", label: "Bored", group: "idle" },
+                { key: "idle_feminine", label: "Feminine", group: "idle" },
+                { key: "idle_fit_check", label: "Fit Check", group: "idle" },
+                { key: "reaction_bashful", label: "Bashful", group: "reaction" },
+                { key: "reaction_cheering", label: "Cheering", group: "reaction" },
+                { key: "reaction_clapping", label: "Clapping", group: "reaction" },
+                { key: "reaction_crying", label: "Crying", group: "reaction" },
+                { key: "reaction_disagree", label: "Disagree", group: "reaction" },
+                { key: "reaction_disbelief", label: "Disbelief", group: "reaction" },
+                { key: "reaction_explaining", label: "Explaining", group: "reaction" },
+                { key: "reaction_no", label: "No", group: "reaction" },
+                { key: "reaction_talking", label: "Talking", group: "reaction" },
+                { key: "reaction_thinking", label: "Thinking", group: "reaction" },
+                { key: "reaction_yawn", label: "Yawn", group: "reaction" },
+                { key: "reaction_yes", label: "Yes", group: "reaction" },
+            ];
+
+            (function buildAnimPanel() {
+                const groups = {
+                    action: [],
+                    dance: [],
+                    reaction: [],
+                    idle: [],
+                };
+                PANEL_ANIMATIONS.forEach((a) => groups[a.group]?.push(a));
+                Object.entries(groups).forEach(([grp, anims]) => {
+                    const container = document.getElementById(
+                        "anim-group-" + grp,
+                    );
+                    if (!container) return;
+                    anims.forEach((a) => {
+                        const btn = document.createElement("button");
+                        btn.className = "anim-card";
+                        btn.innerHTML = `<span class="anim-dot ${grp}"></span>${a.label}`;
+                        btn.onclick = () => {
+                            window.playAnimation(a.key);
+                            window.closeSettings();
+                        };
+                        container.appendChild(btn);
+                    });
+                });
+            })();
+
+            // ── BUILD BACKGROUND SWATCHES ────────────────────────────────
+            // --- UI Interactions ---
+            const userInput = document.getElementById("userInput");
+            const MAX_INPUT_CHARS = 1000;
+
+            userInput.addEventListener("input", function () {
+                this.style.height = "auto";
+                this.style.height = this.scrollHeight + "px";
+                // Update char counter
+                const remaining = MAX_INPUT_CHARS - this.value.length;
+                const counter = document.getElementById("charCounter");
+                if (counter) {
+                    counter.textContent = remaining < 150 ? `${remaining}` : "";
+                    counter.style.color =
+                        remaining < 50 ? "#e05c5c" : "var(--text-muted)";
+                }
+            });
+
+            userInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    window.sendText();
+                }
+                // Hard cap: block typing past limit (allow backspace/delete/nav)
+                const navKeys = [
+                    "Backspace",
+                    "Delete",
+                    "ArrowLeft",
+                    "ArrowRight",
+                    "ArrowUp",
+                    "ArrowDown",
+                    "Home",
+                    "End",
+                ];
+                if (
+                    this.value.length >= MAX_INPUT_CHARS &&
+                    !navKeys.includes(e.key) &&
+                    !e.ctrlKey &&
+                    !e.metaKey
+                ) {
+                    e.preventDefault();
+                }
+            });
+
+            window.clearImagePreview = function () {
+                document.getElementById("imageInput").value = "";
+                document.getElementById("previewContainer").style.display =
+                    "none";
+            };
+
+            // --- Voice Input (Groq Whisper) ---
+            let mediaRecorder = null;
+            let audioChunks = [];
+            let isRecording = false;
+
+            window.toggleMic = async function () {
+                const micBtn = document.getElementById("micBtn");
+
+                if (isRecording) {
+                    // Stop recording
+                    mediaRecorder.stop();
+                    return;
+                }
+
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                    });
+                    // Prefer webm/opus, fall back to whatever the browser supports
+                    const mimeType = MediaRecorder.isTypeSupported(
+                        "audio/webm;codecs=opus",
+                    )
+                        ? "audio/webm;codecs=opus"
+                        : MediaRecorder.isTypeSupported("audio/webm")
+                          ? "audio/webm"
+                          : "audio/ogg";
+
+                    mediaRecorder = new MediaRecorder(stream, { mimeType });
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) audioChunks.push(e.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        isRecording = false;
+                        micBtn.classList.remove("recording");
+                        stream.getTracks().forEach((t) => t.stop());
+
+                        const blob = new Blob(audioChunks, { type: mimeType });
+                        if (blob.size < 1000) return; // Too short, ignore
+
+                        statusIndicator.textContent = "Transcribing...";
+                        statusIndicator.className = "processing";
+
+                        const fd = new FormData();
+                        fd.append("audio", blob, "recording.webm");
+
+                        try {
+                            const res = await fetch("/transcribe", {
+                                method: "POST",
+                                body: fd,
+                            });
+                            const data = await res.json();
+                            if (data.text && data.text.trim()) {
+                                userInput.value = data.text.trim();
+                                userInput.style.height = "auto";
+                                userInput.style.height =
+                                    userInput.scrollHeight + "px";
+                                // Auto-send after transcription
+                                window.sendText();
+                            } else {
+                                // Empty or hallucination blocked — show brief feedback
+                                statusIndicator.textContent =
+                                    "Didn't catch that";
+                                setTimeout(() => {
+                                    statusIndicator.textContent = "Standby";
+                                    statusIndicator.className = "";
+                                }, 2000);
+                            }
+                        } catch (e) {
+                            console.error("Transcription failed:", e);
+                            statusIndicator.textContent = "Standby";
+                            statusIndicator.className = "";
+                        }
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    micBtn.classList.add("recording");
+
+                    // Brief delay before showing "Listening" so user knows when to speak
+                    // This also lets the WebM encoder initialize so the first syllable isn't clipped
+                    statusIndicator.textContent = "Get ready...";
+                    statusIndicator.className = "processing";
+                    setTimeout(() => {
+                        if (isRecording)
+                            statusIndicator.textContent = "Listening...";
+                    }, 400);
+                } catch (e) {
+                    console.error("Mic access denied:", e);
+                    statusIndicator.textContent = "Mic denied";
+                    statusIndicator.className = "";
+                }
+            };
+
+            window.toggleChat = function () {
+                const container = document.getElementById("chat-container");
+                const btn = document.getElementById("toggleChatBtn");
+                container.classList.toggle("collapsed");
+
+                if (container.classList.contains("collapsed")) {
+                    btn.classList.remove("active");
+                    btn.style.color = "var(--text-muted)";
+                } else {
+                    btn.classList.add("active");
+                    btn.style.color = "var(--highlight)";
+                    const log = document.getElementById("chat-log");
+                    log.scrollTop = log.scrollHeight;
+                }
+            };
+
+            // --- Audio Analysis & Boost for Lip Sync ---
+            let audioCtx, analyser, dataArray, gainNode;
+            let currentFetchController = null; // For aborting in-flight requests
+            function initAudioAnalysis() {
+                if (audioCtx) return;
+                audioCtx = new (
+                    window.AudioContext || window.webkitAudioContext
+                )();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256;
+
+                gainNode = audioCtx.createGain();
+                gainNode.gain.value = 2.5;
+
+                const source = audioCtx.createMediaElementSource(audioPlayer);
+                source.connect(gainNode);
+                gainNode.connect(analyser);
+                analyser.connect(audioCtx.destination);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+            }
+
+            // Mobile-safe play: resumes suspended AudioContext first (iOS/Android requirement).
+            // Without this, speech.wav is served correctly but plays silently on phones.
+            async function safePlay(audioEl) {
+                try {
+                    if (audioCtx && audioCtx.state === "suspended") {
+                        await audioCtx.resume();
+                    }
+                    await audioEl.play();
+                } catch (e) {
+                    console.warn("safePlay failed:", e);
+                }
+            }
+
+            // TTS mute — silences Ava's voice without stopping the LLM or chat bubbles
+            let ttsMuted = false;
+            window.toggleTtsMute = function () {
+                ttsMuted = !ttsMuted;
+                const btn = document.getElementById("ttsMuteBtn");
+                const icon = document.getElementById("ttsMuteIcon");
+                if (ttsMuted) {
+                    // Stop current speech immediately
+                    audioPlayer.pause();
+                    audioPlayer.src = "";
+                    currentMouthOpen = 0;
+                    btn.classList.add("active");
+                    btn.style.color = "#e05c5c";
+                    btn.title = "Unmute voice";
+                    // Swap icon to muted speaker
+                    icon.innerHTML =
+                        '<path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
+                    statusIndicator.textContent = "Muted";
+                } else {
+                    btn.classList.remove("active");
+                    btn.style.color = "";
+                    btn.title = "Mute voice";
+                    // Restore speaker icon
+                    icon.innerHTML =
+                        '<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+                    statusIndicator.textContent = "Standby";
+                }
+            };
+
+            const VRM_DEFAULT = assetPathPrefix + "Avatar_Sample.vrm";
+
+            const curatedAnimations = [
+                "action_greeting",
+                "action_jump",
+                "action_catwalk",
+                "action_jogging",
+                "action_running",
+                "action_walking",
+                "action_listening_music",
+                "action_peace_cute",
+                "action_spin_tada",
+                "dance_aiba",
+                "dance_samba",
+                "dance_silly",
+                "dance_soul_spin",
+                "idle_1",
+                "idle_3",
+                "idle_4",
+                "idle_arm_swing",
+                "idle_bored",
+                "idle_feminine",
+                "idle_fit_check",
+                "reaction_bashful",
+                "reaction_cheering",
+                "reaction_clapping",
+                "reaction_crying",
+                "reaction_disagree",
+                "reaction_disbelief",
+                "reaction_explaining",
+                "reaction_no",
+                "reaction_talking",
+                "reaction_thinking",
+                "reaction_yawn",
+                "reaction_yes",
+            ];
+
+            // Default set to your preferred anchor idle
+            const animFileMap = {
+                idle: "animations/idle_1.bvh",
+                idle_1: "animations/idle_1.bvh",
+                idle_3: "animations/idle_3.bvh",
+                idle_4: "animations/idle_4.bvh",
+                idle_bored: "animations/idle_bored.bvh",
+                action_listening_music: "animations/action_listening_music.bvh",
+                reaction_disagree: "animations/reaction_disagree.bvh",
+                reaction_yes: "animations/reaction_yes.bvh",
+                reaction_no: "animations/reaction_no.bvh",
+            };
+
+            // Populate animFileMap for all curated animations (BVH loader still needs these)
+            curatedAnimations.forEach((name) => {
+                animFileMap[name] = `animations/${name}.bvh`;
+            });
+
+            const bvhVRMRigMap = {
+                hips: "hips",
+                pelvis: "hips",
+                root: "hips",
+                spine: "spine",
+                spine1: "chest",
+                chest: "chest",
+                spine2: "upperChest",
+                upperchest: "upperChest",
+                neck: "neck",
+                head: "head",
+                leftshoulder: "leftShoulder",
+                lshoulder: "leftShoulder",
+                leftarm: "leftUpperArm",
+                leftupperarm: "leftUpperArm",
+                lupperarm: "leftUpperArm",
+                leftlowerarm: "leftLowerArm",
+                leftforearm: "leftLowerArm",
+                llowerarm: "leftLowerArm",
+                lefthand: "leftHand",
+                lhand: "leftHand",
+                rightshoulder: "rightShoulder",
+                rshoulder: "rightShoulder",
+                rightarm: "rightUpperArm",
+                rightupperarm: "rightUpperArm",
+                rupperarm: "rightUpperArm",
+                rightlowerarm: "rightLowerArm",
+                rightforearm: "rightLowerArm",
+                rlowerarm: "rightLowerArm",
+                righthand: "rightHand",
+                rhand: "rightHand",
+                leftupleg: "leftUpperLeg",
+                leftupperleg: "leftUpperLeg",
+                lupperleg: "leftUpperLeg",
+                leftlowerleg: "leftLowerLeg",
+                leftfoot: "leftFoot",
+                lefttoe: "leftToes",
+                lefttoebase: "leftToes",
+                lfoot: "leftFoot",
+                ltoe: "leftToes",
+                rightupleg: "rightUpperLeg",
+                rightupperleg: "rightUpperLeg",
+                rupperleg: "rightUpperLeg",
+                rightlowerleg: "rightLowerLeg",
+                rightfoot: "rightFoot",
+                righttoe: "rightToes",
+                righttoebase: "rightToes",
+                rfoot: "rightFoot",
+                rtoe: "rightToes",
+                lefthandthumb1: "leftThumbProximal",
+                leftthumb1: "leftThumbProximal",
+                lthumb1: "leftThumbProximal",
+                leftthumbproximal: "leftThumbProximal",
+                lefthandthumb2: "leftThumbIntermediate",
+                leftthumb2: "leftThumbIntermediate",
+                lthumb2: "leftThumbIntermediate",
+                leftthumbintermediate: "leftThumbIntermediate",
+                lefthandthumb3: "leftThumbDistal",
+                leftthumb3: "leftThumbDistal",
+                lthumb3: "leftThumbDistal",
+                leftthumbdistal: "leftThumbDistal",
+                lefthandindex1: "leftIndexProximal",
+                leftindex1: "leftIndexProximal",
+                lindex1: "leftIndexProximal",
+                leftindexproximal: "leftIndexProximal",
+                lefthandindex2: "leftIndexIntermediate",
+                leftindex2: "leftIndexIntermediate",
+                lindex2: "leftIndexIntermediate",
+                leftindexintermediate: "leftIndexIntermediate",
+                lefthandindex3: "leftIndexDistal",
+                leftindex3: "leftIndexDistal",
+                lindex3: "leftIndexDistal",
+                leftindexdistal: "leftIndexDistal",
+                lefthandmiddle1: "leftMiddleProximal",
+                leftmiddle1: "leftMiddleProximal",
+                lmiddle1: "leftMiddleProximal",
+                leftmiddleproximal: "leftMiddleProximal",
+                lefthandmiddle2: "leftMiddleIntermediate",
+                leftmiddle2: "leftMiddleIntermediate",
+                lmiddle2: "leftMiddleIntermediate",
+                leftmiddleintermediate: "leftMiddleIntermediate",
+                lefthandmiddle3: "leftMiddleDistal",
+                leftmiddle3: "leftMiddleDistal",
+                lmiddle3: "leftMiddleDistal",
+                leftmiddledistal: "leftMiddleDistal",
+                lefthandring1: "leftRingProximal",
+                leftring1: "leftRingProximal",
+                lring1: "leftRingProximal",
+                leftringproximal: "leftRingProximal",
+                lefthandring2: "leftRingIntermediate",
+                leftring2: "leftRingIntermediate",
+                lring2: "leftRingIntermediate",
+                leftringintermediate: "leftRingIntermediate",
+                lefthandring3: "leftRingDistal",
+                leftring3: "leftRingDistal",
+                lring3: "leftRingDistal",
+                leftringdistal: "leftRingDistal",
+                lefthandpinky1: "leftLittleProximal",
+                leftlittle1: "leftLittleProximal",
+                lpinky1: "leftLittleProximal",
+                llittle1: "leftLittleProximal",
+                leftlittleproximal: "leftLittleProximal",
+                lefthandpinky2: "leftLittleIntermediate",
+                leftlittle2: "leftLittleIntermediate",
+                lpinky2: "leftLittleIntermediate",
+                llittle2: "leftLittleIntermediate",
+                leftlittleintermediate: "leftLittleIntermediate",
+                lefthandpinky3: "leftLittleDistal",
+                leftlittle3: "leftLittleDistal",
+                lpinky3: "leftLittleDistal",
+                llittle3: "leftLittleDistal",
+                leftlittledistal: "leftLittleDistal",
+                righthandthumb1: "rightThumbProximal",
+                rightthumb1: "rightThumbProximal",
+                rthumb1: "rightThumbProximal",
+                rightthumbproximal: "rightThumbProximal",
+                righthandthumb2: "rightThumbIntermediate",
+                rightthumb2: "rightThumbIntermediate",
+                rthumb2: "rightThumbIntermediate",
+                rightthumbintermediate: "rightThumbIntermediate",
+                righthandthumb3: "rightThumbDistal",
+                rightthumb3: "rightThumbDistal",
+                rthumb3: "rightThumbDistal",
+                rightthumbdistal: "rightThumbDistal",
+                righthandindex1: "rightIndexProximal",
+                rightindex1: "rightIndexProximal",
+                rindex1: "rightIndexProximal",
+                rightindexproximal: "rightIndexProximal",
+                righthandindex2: "rightIndexIntermediate",
+                rightindex2: "rightIndexIntermediate",
+                rindex2: "rightIndexIntermediate",
+                rightindexintermediate: "rightIndexIntermediate",
+                righthandindex3: "rightIndexDistal",
+                rightindex3: "rightIndexDistal",
+                rindex3: "rightIndexDistal",
+                rightindexdistal: "rightIndexDistal",
+                righthandmiddle1: "rightMiddleProximal",
+                rightmiddle1: "rightMiddleProximal",
+                rmiddle1: "rightMiddleProximal",
+                rightmiddleproximal: "rightMiddleProximal",
+                righthandmiddle2: "rightMiddleIntermediate",
+                rightmiddle2: "rightMiddleIntermediate",
+                rmiddle2: "rightMiddleIntermediate",
+                rightmiddleintermediate: "rightMiddleIntermediate",
+                righthandmiddle3: "rightMiddleDistal",
+                rightmiddle3: "rightMiddleDistal",
+                rmiddle3: "rightMiddleDistal",
+                rightmiddledistal: "rightMiddleDistal",
+                righthandring1: "rightRingProximal",
+                rightring1: "rightRingProximal",
+                rring1: "rightRingProximal",
+                rightringproximal: "rightRingProximal",
+                righthandring2: "rightRingIntermediate",
+                rightring2: "rightRingIntermediate",
+                rring2: "rightRingIntermediate",
+                rightringintermediate: "rightRingIntermediate",
+                righthandring3: "rightRingDistal",
+                rightring3: "rightRingDistal",
+                rring3: "rightRingDistal",
+                rightringdistal: "rightRingDistal",
+                righthandpinky1: "rightLittleProximal",
+                rightlittle1: "rightLittleProximal",
+                rpinky1: "rightLittleProximal",
+                rlittle1: "rightLittleProximal",
+                rightlittleproximal: "rightLittleProximal",
+                righthandpinky2: "rightLittleIntermediate",
+                rightlittle2: "rightLittleIntermediate",
+                rpinky2: "rightLittleIntermediate",
+                rlittle2: "rightLittleIntermediate",
+                rightlittleintermediate: "rightLittleIntermediate",
+                righthandpinky3: "rightLittleDistal",
+                rightlittle3: "rightLittleDistal",
+                rpinky3: "rightLittleDistal",
+                rlittle3: "rightLittleDistal",
+                rightlittledistal: "rightLittleDistal",
+            };
+
+            // ── EXPRESSION SYSTEM (VRM1 preset names) ───────────────────
+            // VRM1 uses: happy, sad, angry, surprised, relaxed
+            // "happy" closes eyes + wide mouth — too intense. Use "relaxed" for smiling.
+            const VRM1_EXPRS = [
+                "happy",
+                "sad",
+                "angry",
+                "surprised",
+                "relaxed",
+            ];
+            const exprTarget = {
+                happy: 0,
+                sad: 0,
+                angry: 0,
+                surprised: 0,
+                relaxed: 0,
+            };
+            const exprCurrent = {
+                happy: 0,
+                sad: 0,
+                angry: 0,
+                surprised: 0,
+                relaxed: 0,
+            };
+
+            // Blend multiple morph targets simultaneously for richer expressions
+            function setExprBlend(blends) {
+                VRM1_EXPRS.forEach((e) => (exprTarget[e] = 0));
+                for (const [name, val] of Object.entries(blends)) {
+                    if (exprTarget.hasOwnProperty(name)) exprTarget[name] = val;
+                }
+            }
+
+            function setExprTarget(name, value) {
+                VRM1_EXPRS.forEach((e) => (exprTarget[e] = 0));
+                if (name && exprTarget.hasOwnProperty(name))
+                    exprTarget[name] = value;
+            }
+
+            // Fade expression back to neutral after speech finishes
+            let exprFadeTimeout = null;
+            function scheduleExpressionFade(emotion) {
+                if (exprFadeTimeout) clearTimeout(exprFadeTimeout);
+                // Neutral & relaxed don't need fade — they're fine to hold
+                const persistent = [
+                    "neutral",
+                    "relaxed",
+                    "smiling",
+                    "smug",
+                    "happy",
+                    "",
+                ];
+                if (!emotion || persistent.includes(emotion.toLowerCase()))
+                    return;
+                // Wait for audio to end then fade — estimate via a reasonable max delay
+                exprFadeTimeout = setTimeout(() => {
+                    setExprBlend({ relaxed: 0.3 }); // settle back to soft neutral
+                }, 12000); // 12s safety fallback; audioPlayer.onended also resets
+            }
+
+            // Map emotion strings → morph blends for expressive combinations
+            const EMOTION_BLEND_MAP = {
+                // ── Base VRM1 presets ──
+                happy: { relaxed: 0.7, happy: 0.3 },
+                smiling: { relaxed: 1.0 },
+                sad: { sad: 1.0 },
+                angry: { angry: 1.0 },
+                surprised: { surprised: 1.0 },
+                // ── Blended expressions ──
+                blushing: { surprised: 0.25, relaxed: 0.4, sad: 0.15 },
+                embarrassed: { sad: 0.4, surprised: 0.3 },
+                pouting: { sad: 0.55, angry: 0.3 },
+                smug: { relaxed: 0.6, happy: 0.2 },
+                teasing: { relaxed: 0.5, happy: 0.3 },
+                flustered: { surprised: 0.4, happy: 0.25, sad: 0.1 },
+                sleepy: { relaxed: 0.5, sad: 0.2 },
+                nervous: { sad: 0.3, surprised: 0.25 },
+                excited: { happy: 0.5, surprised: 0.4 },
+                curious: { surprised: 0.3, relaxed: 0.2 },
+                disappointed: { sad: 0.6, angry: 0.2 },
+                worried: { sad: 0.4, surprised: 0.2 },
+                grateful: { relaxed: 0.6, happy: 0.2 },
+                neutral: {},
+            };
+
+            function updateMood(emotionStr) {
+                if (!emotionStr) return;
+                const moodDisplay = document.getElementById("ava-mood-display");
+                const str = emotionStr.toLowerCase().trim();
+
+                // Direct match first
+                if (EMOTION_BLEND_MAP.hasOwnProperty(str)) {
+                    setExprBlend(EMOTION_BLEND_MAP[str]);
+                    moodDisplay.textContent = str.toUpperCase();
+                    return;
+                }
+
+                // Fuzzy fallback
+                let blend = {};
+                let uiText = "NEUTRAL";
+                if (str.includes("blush")) {
+                    blend = EMOTION_BLEND_MAP.blushing;
+                    uiText = "BLUSHING";
+                } else if (str.includes("pout")) {
+                    blend = EMOTION_BLEND_MAP.pouting;
+                    uiText = "POUTING";
+                } else if (str.includes("smug") || str.includes("teas")) {
+                    blend = EMOTION_BLEND_MAP.smug;
+                    uiText = "SMUG";
+                } else if (str.includes("flust") || str.includes("flustered")) {
+                    blend = EMOTION_BLEND_MAP.flustered;
+                    uiText = "FLUSTERED";
+                } else if (str.includes("sleep") || str.includes("drowsy")) {
+                    blend = EMOTION_BLEND_MAP.sleepy;
+                    uiText = "SLEEPY";
+                } else if (str.includes("excit")) {
+                    blend = EMOTION_BLEND_MAP.excited;
+                    uiText = "EXCITED";
+                } else if (str.includes("nervous") || str.includes("anxious")) {
+                    blend = EMOTION_BLEND_MAP.nervous;
+                    uiText = "NERVOUS";
+                } else if (str.includes("curious")) {
+                    blend = EMOTION_BLEND_MAP.curious;
+                    uiText = "CURIOUS";
+                } else if (str.includes("disappoint")) {
+                    blend = EMOTION_BLEND_MAP.disappointed;
+                    uiText = "DISAPPOINTED";
+                } else if (str.includes("worr")) {
+                    blend = EMOTION_BLEND_MAP.worried;
+                    uiText = "WORRIED";
+                } else if (str.includes("embarra")) {
+                    blend = EMOTION_BLEND_MAP.embarrassed;
+                    uiText = "EMBARRASSED";
+                } else if (str.includes("grat") || str.includes("thank")) {
+                    blend = EMOTION_BLEND_MAP.grateful;
+                    uiText = "GRATEFUL";
+                } else if (str.includes("happy") || str.includes("smil")) {
+                    blend = EMOTION_BLEND_MAP.smiling;
+                    uiText = "SMILING";
+                } else if (str.includes("sad")) {
+                    blend = EMOTION_BLEND_MAP.sad;
+                    uiText = "SAD";
+                } else if (str.includes("ang")) {
+                    blend = EMOTION_BLEND_MAP.angry;
+                    uiText = "ANGRY";
+                } else if (str.includes("surp")) {
+                    blend = EMOTION_BLEND_MAP.surprised;
+                    uiText = "SURPRISED";
+                }
+
+                moodDisplay.textContent = uiText;
+                setExprBlend(blend);
+            }
+
+            // Animation → auto expression: when an animation plays, match its mood
+            const ANIM_EMOTION_MAP = {
+                reaction_crying: "sad",
+                reaction_victory: "relaxed",
+                reaction_cheering: "relaxed",
+                reaction_clapping: "relaxed",
+                reaction_bashful: "relaxed",
+                reaction_disbelief: "surprised",
+                reaction_yes: "relaxed",
+                reaction_no: "sad",
+                reaction_disagree: "angry",
+                reaction_being_rejected: "sad",
+                action_guitar: "relaxed",
+                action_listening_music: "relaxed",
+                dance_belly: "relaxed",
+                dance_samba: "relaxed",
+                dance_salsa: "relaxed",
+                dance_gangnam_style: "relaxed",
+                dance_macarena: "relaxed",
+                dance_rumba: "relaxed",
+                dance_shuffling: "relaxed",
+                dance_silly: "relaxed",
+                dance_soul_spin: "relaxed",
+                dance_swing: "relaxed",
+                dance_twerk: "relaxed",
+                dance_twist: "relaxed",
+                dance_chicken_loser: "relaxed",
+                dance_robot: "neutral",
+            };
+
+            // Timed aa-morph for yawn — open mouth over 1.5s then close
+            let yawnSequence = null;
+            function startYawnSequence() {
+                yawnSequence = { elapsed: 0 };
+            }
+
+            function fadeOutMusic() {
+                if (musicPlayer.paused) return;
+                clearInterval(audioFadeInterval);
+                audioFadeInterval = setInterval(() => {
+                    if (musicPlayer.volume > 0.02) {
+                        musicPlayer.volume = Math.max(
+                            0,
+                            musicPlayer.volume - 0.02,
+                        );
+                    } else {
+                        musicPlayer.volume = 0;
+                        musicPlayer.pause();
+                        musicPlayer.currentTime = 0;
+                        clearInterval(audioFadeInterval);
+                    }
+                }, 50);
+            }
+
+            window.playAnimation = async (animKey) => {
+                if (!currentVrm || !animKey) return;
+
+                currentAnimKey = animKey;
+                isInIdleState = animKey.startsWith("idle");
+
+                // Auto-expression from animation
+                if (ANIM_EMOTION_MAP.hasOwnProperty(animKey)) {
+                    setExprTarget(ANIM_EMOTION_MAP[animKey], 1.0);
+                }
+                if (animKey === "reaction_yawn") startYawnSequence();
+
+                let clip = animationsMap.get(animKey);
+                if (!clip && animFileMap[animKey]) {
+                    clip = await loadBVH(
+                        assetPathPrefix + animFileMap[animKey],
+                        currentVrm,
+                    );
+                    if (clip) animationsMap.set(animKey, clip);
+                }
+                if (!clip) return;
+
+                // --- THE FIX: Check both the Key AND the Filename (case-insensitive) ---
+                const filename = animFileMap[animKey] || "";
+                const searchStr = (animKey + " " + filename).toLowerCase();
+
+                // Always fade out any background music on animation change
+                fadeOutMusic();
+
+                const nextAction = mixer.clipAction(clip);
+                nextAction.reset();
+
+                // --- BULLETPROOF LOOPING LOGIC ---
+                const isLooping =
+                    searchStr.includes("idle") ||
+                    searchStr.includes("dance") ||
+                    searchStr.includes("salsa") ||
+                    searchStr.includes("samba") ||
+                    searchStr.includes("exercise") ||
+                    searchStr.includes("guitar") ||
+                    searchStr.includes("listening_music") ||
+                    searchStr.includes("walking") ||
+                    searchStr.includes("jogging") ||
+                    searchStr.includes("running");
+
+                if (isLooping) {
+                    nextAction.setLoop(THREE.LoopRepeat, Infinity);
+                    nextAction.clampWhenFinished = false;
+                } else {
+                    nextAction.setLoop(THREE.LoopOnce, 1);
+                    nextAction.clampWhenFinished = true;
+                }
+
+                // Force weights to 1 to prevent frozen animations
+                nextAction.setEffectiveTimeScale(1);
+                nextAction.setEffectiveWeight(1);
+                nextAction.play();
+
+                if (currentAction && currentAction !== nextAction) {
+                    currentAction.crossFadeTo(nextAction, 0.4, true);
+                }
+                currentAction = nextAction;
+
+                // --- AUTO-IDLE TIMERS ---
+                if (window.animTimeout) clearTimeout(window.animTimeout);
+
+                if (
+                    searchStr.includes("dance") ||
+                    searchStr.includes("exercise") ||
+                    searchStr.includes("samba") ||
+                    searchStr.includes("salsa") ||
+                    searchStr.includes("walking") ||
+                    searchStr.includes("jogging") ||
+                    searchStr.includes("running")
+                ) {
+                    // For long looping animations, stop after 30 seconds and return to idle
+                    window.animTimeout = setTimeout(() => {
+                        console.log(
+                            "Animation timer finished. Returning to idle.",
+                        );
+                        window.playAnimation("idle_1");
+                    }, 30000);
+                } else if (!isLooping) {
+                    // For reactions/actions that play once, automatically return to idle exactly when the clip finishes!
+                    window.animTimeout = setTimeout(() => {
+                        window.playAnimation("idle_1");
+                    }, clip.duration * 1000);
+                }
+            };
+
+            // UNIFIED PIPELINE BVH LOADER (XR Animator Standard Anchor)
+            async function loadBVH(url, vrm) {
+                const loader = new BVHLoader();
+                try {
+                    const bvh = await loader.loadAsync(url);
+                    const tracks = [];
+                    bvh.clip.tracks.forEach((track) => {
+                        const rawName = track.name.split(".")[0];
+                        const cleanName = rawName
+                            .replace(/mixamorig|[:_ \-]/gi, "")
+                            .toLowerCase();
+
+                        let vrmBone = bvhVRMRigMap[cleanName];
+                        if (!vrmBone) {
+                            const directMatch = Object.values(
+                                bvhVRMRigMap,
+                            ).find((val) => val.toLowerCase() === cleanName);
+                            if (directMatch) vrmBone = directMatch;
+                        }
+
+                        const vrmNode = vrmBone
+                            ? vrm.humanoid?.getNormalizedBoneNode(vrmBone)
+                            : null;
+                        if (vrmNode) {
+                            const prop = track.name.split(".")[1];
+                            if (
+                                track instanceof THREE.QuaternionKeyframeTrack
+                            ) {
+                                tracks.push(
+                                    new THREE.QuaternionKeyframeTrack(
+                                        `${vrmNode.name}.${prop}`,
+                                        track.times,
+                                        track.values,
+                                    ),
+                                );
+                            } else if (
+                                vrmBone === "hips" &&
+                                prop === "position"
+                            ) {
+                                const vrmRestY = vrmNode.position.y;
+                                const bvhRestY =
+                                    bvh.skeleton.bones[0].position.y || 1;
+
+                                const scale = vrmRestY / bvhRestY;
+
+                                const initX = track.values[0];
+                                const initY = track.values[1];
+                                const initZ = track.values[2];
+
+                                const adjustedValues = new Float32Array(
+                                    track.values.length,
+                                );
+                                for (
+                                    let i = 0;
+                                    i < track.values.length;
+                                    i += 3
+                                ) {
+                                    adjustedValues[i] =
+                                        (track.values[i] - initX) * scale +
+                                        vrmNode.position.x;
+                                    adjustedValues[i + 2] =
+                                        (track.values[i + 2] - initZ) * scale +
+                                        vrmNode.position.z;
+                                    adjustedValues[i + 1] =
+                                        (track.values[i + 1] - initY) * scale +
+                                        vrmRestY;
+                                }
+                                tracks.push(
+                                    new THREE.VectorKeyframeTrack(
+                                        `${vrmNode.name}.position`,
+                                        track.times,
+                                        adjustedValues,
+                                    ),
+                                );
+                            }
+                        }
+                    });
+                    return new THREE.AnimationClip(
+                        url,
+                        bvh.clip.duration,
+                        tracks,
+                    );
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            async function loadVRM(url) {
+                const loader = new GLTFLoader();
+                loader.register((p) => new VRMLoaderPlugin(p));
+                const overlay = document.getElementById("loading-overlay");
+                if (isFirstLoad) overlay.classList.remove("hidden");
+
+                const gltf = await loader.loadAsync(url);
+                if (currentVrm) scene.remove(currentVrm.scene);
+                currentVrm = gltf.userData.vrm;
+                scene.add(currentVrm.scene);
+                // rotateVRM0 is only needed for VRM0 models (they load backwards).
+                // VRM1 exports from VRoid Studio are already correctly oriented — calling
+                // this on VRM1 rotates her 180° and makes her invisible / back-facing.
+                if (currentVrm.meta?.metaVersion === "0") {
+                    VRMUtils.rotateVRM0(currentVrm);
+                }
+
+                // Configure look-at to track the camera
+                if (currentVrm.lookAt) {
+                    currentVrm.lookAt.target = camera;
+
+                    // VRM0 (VRoid Studio export) stores range directly on lookAt curves.
+                    // VRM1 uses applier.rangeMap* — we handle both safely.
+                    const LOOK_RANGE_IDLE = 8; // subtle glance while idle
+                    const LOOK_RANGE_SPEAK = 30; // direct eye contact while speaking
+                    const LOOK_RANGE_ANIM = 0; // disabled during animations
+
+                    // Store the setter so the animate loop can call it
+                    currentVrm._setLookAtRange = (deg) => {
+                        try {
+                            // VRM1 path
+                            if (
+                                currentVrm.lookAt.applier
+                                    ?.rangeMapHorizontalInner
+                            ) {
+                                currentVrm.lookAt.applier.rangeMapHorizontalInner.outputScale =
+                                    deg;
+                                currentVrm.lookAt.applier.rangeMapHorizontalOuter.outputScale =
+                                    deg;
+                                currentVrm.lookAt.applier.rangeMapVerticalDown.outputScale =
+                                    deg;
+                                currentVrm.lookAt.applier.rangeMapVerticalUp.outputScale =
+                                    deg;
+                            }
+                            // VRM0 path — curves live directly on lookAt
+                            if (currentVrm.lookAt.curveHorizontalInner) {
+                                currentVrm.lookAt.curveHorizontalInner.curve[3] =
+                                    deg;
+                                currentVrm.lookAt.curveHorizontalOuter.curve[3] =
+                                    deg;
+                                currentVrm.lookAt.curveVerticalDown.curve[3] =
+                                    deg;
+                                currentVrm.lookAt.curveVerticalUp.curve[3] =
+                                    deg;
+                            }
+                        } catch (e) {
+                            /* ignore — model may not support all paths */
+                        }
+                    };
+
+                    // Expose the constants so the animate loop can reference them
+                    currentVrm._lookRangeIdle = LOOK_RANGE_IDLE;
+                    currentVrm._lookRangeSpeak = LOOK_RANGE_SPEAK;
+                    currentVrm._lookRangeAnim = LOOK_RANGE_ANIM;
+
+                    // Start at idle range
+                    currentVrm._setLookAtRange(LOOK_RANGE_IDLE);
+                }
+
+                mixer = new THREE.AnimationMixer(currentVrm.scene);
+
+                // Capture the initial scene transform right after VRM is added to scene
+                // so the reposition button can snap her back to this exact state.
+                window._vrmInitialPosition = currentVrm.scene.position.clone();
+                window._vrmInitialRotation = currentVrm.scene.rotation.clone();
+
+                mixer.addEventListener("finished", (e) => {
+                    if (
+                        e.action === currentAction &&
+                        e.action._animKey &&
+                        !e.action._animKey.includes("idle")
+                    ) {
+                        window.playAnimation("idle_1");
+                    }
+                });
+
+                updateMood(
+                    document.getElementById("ava-mood-display").textContent,
+                );
+                window.playAnimation("idle_1");
+
+                setTimeout(() => {
+                    overlay.classList.add("hidden");
+                    isFirstLoad = false;
+                    // Always snap camera to default position on every VRM load
+                    // (covers both first load and outfit changes)
+                    window.resetCamera();
+                    // Only greet on the very first VRM load, not on outfit changes
+                    if (!window._hasGreeted) {
+                        window._hasGreeted = true;
+                        setTimeout(scheduleGreetingAfterGesture, 400);
+                    }
+                }, 800);
+            }
+
+            // Reposition — snaps VRM back to the exact position/rotation it had
+            // when it was first loaded (origin + correct facing), then plays idle_1.
+            window.repositionCharacter = () => {
+                if (!currentVrm) return;
+                if (window._vrmInitialPosition) {
+                    currentVrm.scene.position.copy(window._vrmInitialPosition);
+                } else {
+                    currentVrm.scene.position.set(0, 0, 0);
+                }
+                if (window._vrmInitialRotation) {
+                    currentVrm.scene.rotation.copy(window._vrmInitialRotation);
+                } else {
+                    currentVrm.scene.rotation.set(0, 0, 0);
+                }
+                window.playAnimation("idle_1");
+            };
+
+            // --- Typing Indicator ---
+            let typingIndicatorEl = null;
+
+            function showTypingIndicator() {
+                hideTypingIndicator(); // never show two at once
+
+                const log = document.getElementById("chat-log");
+
+                const wrapper = document.createElement("div");
+                wrapper.className = "ava-wrapper";
+
+                const avatar = document.createElement("div");
+                avatar.className = "ava-avatar";
+                avatar.textContent = "✦";
+
+                const bubble = document.createElement("div");
+                bubble.className = "message ava-message typing-indicator";
+                bubble.innerHTML = "<span></span><span></span><span></span>";
+
+                wrapper.appendChild(avatar);
+                wrapper.appendChild(bubble);
+                log.appendChild(wrapper);
+                log.scrollTop = log.scrollHeight;
+
+                typingIndicatorEl = wrapper;
+            }
+
+            function hideTypingIndicator() {
+                if (typingIndicatorEl) {
+                    typingIndicatorEl.remove();
+                    typingIndicatorEl = null;
+                }
+            }
+
+            // --- Processing state: disables send + triggers thinking animation ---
+            function setProcessing(active) {
+                const btn = document.getElementById("sendTextBtn");
+                const input = document.getElementById("userInput");
+                btn.disabled = active;
+                input.disabled = active;
+                if (active) {
+                    // Only interrupt with thinking animation if she's idle —
+                    // don't snap her out of a dance or action mid-flow
+                    if (isInIdleState) {
+                        window.playAnimation("reaction_thinking");
+                    }
+                } else {
+                    // Only return to idle if we actually triggered thinking
+                    if (isInIdleState) {
+                        window.playAnimation("idle_1");
+                    }
+                }
+            }
+
+            // --- Greeting on first load ---
+            // Live LLM+TTS call — no pre-recorded files needed.
+            async function sendGreeting() {
+                try {
+                    initAudioAnalysis();
+                    updateMood("happy");
+                    window.playAnimation("action_greeting");
+                    statusIndicator.textContent = "Speaking";
+
+                    const fd = new FormData();
+                    fd.append("text", "[GREETING] Give a short, warm greeting to welcome the user. Be friendly and natural.");
+                    const res = await fetch("/chat", { method: "POST", body: fd });
+                    const data = await res.json();
+                    if (data.text) {
+                        appendMessage(data.text, false);
+                        if (data.emotion) updateMood(data.emotion);
+                        if (data.animation) window.playAnimation(data.animation);
+                        audioPlayer.src = `${data.audio_url}?t=${Date.now()}`;
+                        if (!ttsMuted) await safePlay(audioPlayer);
+                        statusIndicator.textContent = ttsMuted ? "Muted" : "Speaking";
+                    }
+                } catch (e) {
+                    console.warn("Greeting skipped:", e);
+                    statusIndicator.textContent = "Standby";
+                    statusIndicator.className = "";
+                }
+            }
+
+            // Mobile unlock: iOS/Android require a user gesture before AudioContext
+            // can start. We queue the greeting and fire it on the first touch/click.
+            let _greetingQueued = false;
+            function scheduleGreetingAfterGesture() {
+                if (_greetingQueued) return;
+                _greetingQueued = true;
+
+                const unlock = async () => {
+                    // Remove listeners immediately so this only fires once
+                    document.removeEventListener("touchstart", unlock, true);
+                    document.removeEventListener("mousedown", unlock, true);
+                    document.removeEventListener("keydown", unlock, true);
+
+                    // Boot the AudioContext now that we have a gesture
+                    initAudioAnalysis();
+                    if (audioCtx && audioCtx.state === "suspended") {
+                        await audioCtx.resume();
+                    }
+                    sendGreeting();
+                };
+
+                document.addEventListener("touchstart", unlock, {
+                    capture: true,
+                    once: true,
+                });
+                document.addEventListener("mousedown", unlock, {
+                    capture: true,
+                    once: true,
+                });
+                document.addEventListener("keydown", unlock, {
+                    capture: true,
+                    once: true,
+                });
+            }
+
+            window.sendText = async function () {
+                const text = userInput.value.trim();
+                const file = document.getElementById("imageInput").files[0];
+                if (!text && !file) return;
+
+                // User is active — reset callout so it can fire again next long idle
+                autoCalloutFired = false;
+                autoCalloutTimer = 0;
+
+                // --- Abort any in-flight request ---
+                if (currentFetchController) {
+                    currentFetchController.abort();
+                    currentFetchController = null;
+                }
+
+                // --- Stop and clean up current audio ---
+                if (!audioPlayer.paused) {
+                    audioPlayer.pause();
+                    audioPlayer.src = "";
+                    currentMouthOpen = 0;
+                }
+
+                initAudioAnalysis();
+
+                let fileUrl = null;
+                if (file) fileUrl = URL.createObjectURL(file);
+
+                appendMessage(text || "", true, fileUrl);
+
+                userInput.value = "";
+                userInput.style.height = "auto";
+                document.getElementById("charCounter").textContent = "";
+                window.clearImagePreview();
+
+                statusIndicator.textContent = "Processing...";
+                statusIndicator.className = "processing";
+                setProcessing(true);
+                showTypingIndicator();
+
+                const fd = new FormData();
+                fd.append("text", text);
+                if (file) fd.append("image", file);
+
+                currentFetchController = new AbortController();
+
+                try {
+                    const res = await fetch("/chat", {
+                        method: "POST",
+                        body: fd,
+                        signal: currentFetchController.signal,
+                    });
+                    currentFetchController = null;
+
+                    const data = await res.json();
+                    setProcessing(false);
+                    hideTypingIndicator();
+
+                    statusIndicator.textContent = "Synthesizing...";
+
+                    if (data.emotion) updateMood(data.emotion);
+                    if (data.animation) window.playAnimation(data.animation);
+
+                    // Schedule expression fade-out after speech ends
+                    if (data.audio_url) {
+                        scheduleExpressionFade(data.emotion);
+                    }
+
+                    appendMessage(data.text, false);
+                    audioPlayer.src = `${data.audio_url}?t=${Date.now()}`;
+                    if (!ttsMuted) safePlay(audioPlayer);
+                    statusIndicator.textContent = ttsMuted
+                        ? "Muted"
+                        : "Speaking";
+                } catch (e) {
+                    setProcessing(false);
+                    hideTypingIndicator();
+                    if (e.name === "AbortError") {
+                        // User sent a new message mid-flight — silently discard old response
+                        console.log("⚡ Previous request aborted cleanly.");
+                        return;
+                    }
+                    appendMessage(
+                        "Neural connection lost. Please reconnect.",
+                        false,
+                    );
+                    statusIndicator.textContent = "Error";
+                    statusIndicator.className = "";
+                }
+            };
+
+            audioPlayer.onended = () => {
+                statusIndicator.textContent = "Standby";
+                statusIndicator.className = "";
+                // Clear the safety timeout and gently return to neutral
+                if (exprFadeTimeout) clearTimeout(exprFadeTimeout);
+                exprFadeTimeout = null;
+                // After speech, fade intense expressions back to a soft resting face
+                const currentMax = Math.max(
+                    ...VRM1_EXPRS.map((e) => exprCurrent[e] || 0),
+                );
+                if (currentMax > 0.1) {
+                    setTimeout(() => setExprBlend({ relaxed: 0.15 }), 1200);
+                }
+            };
+
+            function appendMessage(t, u, imgUrl) {
+                const log = document.getElementById("chat-log");
+                const bubble = document.createElement("div");
+                bubble.className = `message ${u ? "user-message" : "ava-message"}`;
+
+                if (imgUrl) {
+                    const img = document.createElement("img");
+                    img.src = imgUrl;
+                    img.style.maxWidth = "100%";
+                    img.style.maxHeight = "200px";
+                    img.style.borderRadius = "10px";
+                    img.style.marginBottom = t ? "10px" : "0";
+                    bubble.appendChild(img);
+                }
+                if (t) {
+                    const span = document.createElement("span");
+                    span.innerText = t;
+                    bubble.appendChild(span);
+                }
+
+                if (u) {
+                    log.appendChild(bubble);
+                } else {
+                    const wrapper = document.createElement("div");
+                    wrapper.className = "ava-wrapper";
+                    const avatar = document.createElement("div");
+                    avatar.className = "ava-avatar";
+                    avatar.textContent = "✦";
+                    wrapper.appendChild(avatar);
+                    wrapper.appendChild(bubble);
+                    log.appendChild(wrapper);
+                }
+                log.appendChild(document.createElement("div")).style.clear =
+                    "both";
+                log.scrollTop = log.scrollHeight;
+            }
+
+            function init() {
+                scene = new THREE.Scene();
+                clock = new THREE.Clock();
+                renderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    alpha: true,
+                });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+                document.body.appendChild(renderer.domElement);
+
+                camera = new THREE.PerspectiveCamera(
+                    30,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    100,
+                );
+                camera.position.set(0, 1.65, 2.5);
+
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.target.set(0, 1.25, 0);
+                controls.enableDamping = true;
+
+                const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+                dirLight.position.set(2, 3, 4);
+                scene.add(dirLight);
+                scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+                // Morning blue — permanent default
+                applyBgHex(BG_DEFAULT_HEX);
+                loadVRM(VRM_DEFAULT);
+
+                document.getElementById("imageInput").onchange = (e) => {
+                    const f = e.target.files[0];
+                    if (f) {
+                        const r = new FileReader();
+                        r.onload = (ev) => {
+                            const preview =
+                                document.getElementById("imagePreview");
+                            preview.src = ev.target.result;
+                            document.getElementById(
+                                "previewContainer",
+                            ).style.display = "block";
+                        };
+                        r.readAsDataURL(f);
+                    }
+                };
+                animate();
+                document.getElementById("sendTextBtn").onclick =
+                    window.sendText;
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+                const dt = clock.getDelta();
+                if (mixer) mixer.update(dt);
+
+                // ── Smooth camera reset ──────────────────────────────────
+                if (cameraResetting && controls) {
+                    camera.position.lerp(CAM_POS, 0.08);
+                    controls.target.lerp(CAM_TARGET, 0.08);
+                    controls.update();
+                    if (camera.position.distanceTo(CAM_POS) < 0.005) {
+                        camera.position.copy(CAM_POS);
+                        controls.target.copy(CAM_TARGET);
+                        cameraResetting = false;
+                        document
+                            .getElementById("resetCameraBtn")
+                            .classList.remove("active");
+                    }
+                }
+
+                if (currentVrm) {
+                    currentVrm.update(dt);
+
+                    // 0. Expression lerp — smooth fade between moods (VRM1 names)
+                    if (currentVrm.expressionManager) {
+                        const mgr = currentVrm.expressionManager;
+                        VRM1_EXPRS.forEach((e) => {
+                            exprCurrent[e] = THREE.MathUtils.lerp(
+                                exprCurrent[e],
+                                exprTarget[e],
+                                0.06,
+                            );
+                            try {
+                                mgr.setValue(e, exprCurrent[e]);
+                            } catch (_) {}
+                        });
+                    }
+
+                    // 1. Natural Blinking Logic
+                    blinkTimer += dt;
+                    if (blinkTimer > nextBlinkDelay) {
+                        const blinkProgress =
+                            (blinkTimer - nextBlinkDelay) / blinkDuration;
+                        if (blinkProgress <= 1.0) {
+                            try {
+                                currentVrm.expressionManager.setValue(
+                                    "blink",
+                                    Math.sin(blinkProgress * Math.PI),
+                                );
+                            } catch (_) {}
+                        } else {
+                            try {
+                                currentVrm.expressionManager.setValue(
+                                    "blink",
+                                    0,
+                                );
+                            } catch (_) {}
+                            blinkTimer = 0;
+                            nextBlinkDelay = 2 + Math.random() * 4;
+                        }
+                    }
+
+                    // 2. Lip sync + yawn aa-morph (yawn overrides lip sync for its duration)
+                    if (yawnSequence !== null) {
+                        yawnSequence.elapsed += dt;
+                        const t = yawnSequence.elapsed;
+                        let aaVal = 0;
+                        if (t < 1.5) aaVal = Math.min(t / 1.5, 1.0);
+                        else if (t < 2.5) aaVal = 1.0;
+                        else if (t < 3.5) aaVal = Math.max(1.0 - (t - 2.5), 0);
+                        else yawnSequence = null;
+                        currentMouthOpen = aaVal;
+                    } else if (!audioPlayer.paused) {
+                        if (clock.elapsedTime - lastMouthUpdate > 0.1) {
+                            targetMouthOpen = Math.random() * 0.45;
+                            lastMouthUpdate = clock.elapsedTime;
+                        }
+                        currentMouthOpen = THREE.MathUtils.lerp(
+                            currentMouthOpen,
+                            targetMouthOpen,
+                            0.35,
+                        );
+                    } else {
+                        currentMouthOpen = THREE.MathUtils.lerp(
+                            currentMouthOpen,
+                            0,
+                            0.2,
+                        );
+                    }
+                    try {
+                        currentVrm.expressionManager.setValue(
+                            "aa",
+                            currentMouthOpen,
+                        );
+                    } catch (_) {}
+
+                    // 3. Ambient Idle Variety — only switch when in idle state and not speaking
+                    if (isInIdleState && audioPlayer.paused) {
+                        idleVariantTimer += dt;
+                        if (idleVariantTimer > nextIdleSwitch) {
+                            idleVariantTimer = 0;
+                            nextIdleSwitch = 18 + Math.random() * 20;
+                            const candidates = IDLE_VARIANTS.filter(
+                                (v) => animFileMap[v],
+                            );
+                            const next =
+                                candidates[
+                                    Math.floor(
+                                        Math.random() * candidates.length,
+                                    )
+                                ];
+                            window
+                                .playAnimation(next)
+                                .catch(() => window.playAnimation("idle_1"));
+                        }
+
+                        // ── Autonomous callout after 8 min of pure idle ──
+                        autoCalloutTimer += dt;
+                        if (
+                            autoCalloutTimer >= AUTO_CALLOUT_SECS &&
+                            !autoCalloutFired
+                        ) {
+                            autoCalloutFired = true;
+                            autoCalloutTimer = 0;
+                            // LLM-driven callout — she generates her own message
+                            window.playAnimation("action_greeting");
+                            (async () => {
+                                try {
+                                    const fd = new FormData();
+                                    fd.append(
+                                        "text",
+                                        "[AUTONOMOUS_IDLE] You've been alone and idle for a while. Initiate a short, natural conversation starter. Be playful or curious — don't just ask if the user is there.",
+                                    );
+                                    const res = await fetch("/chat", {
+                                        method: "POST",
+                                        body: fd,
+                                    });
+                                    const data = await res.json();
+                                    if (data.text) {
+                                        appendMessage(data.text, false);
+                                        if (data.emotion)
+                                            updateMood(data.emotion);
+                                        if (data.animation)
+                                            window.playAnimation(
+                                                data.animation,
+                                            );
+                                        initAudioAnalysis();
+                                        audioPlayer.src = `${data.audio_url}?t=${Date.now()}`;
+                                        if (!ttsMuted) safePlay(audioPlayer);
+                                        statusIndicator.textContent = ttsMuted
+                                            ? "Muted"
+                                            : "Speaking";
+                                    }
+                                } catch (e) {
+                                    console.warn(
+                                        "Autonomous callout failed:",
+                                        e,
+                                    );
+                                }
+                            })();
+                        }
+
+                        // ── Idle expression micro-fidget — subtle shifts every ~30s ──
+                        if (!audioPlayer.paused) return; // don't fidget while speaking
+                        const idleFidgetInterval = 30 + Math.random() * 20;
+                        if (!window._lastFidgetTime) window._lastFidgetTime = 0;
+                        window._lastFidgetTime += dt;
+                        if (window._lastFidgetTime > idleFidgetInterval) {
+                            window._lastFidgetTime = 0;
+                            const fidgets = [
+                                {}, // pure neutral
+                                { relaxed: 0.2 }, // soft content
+                                { sad: 0.15 }, // slightly wistful
+                                { surprised: 0.1, relaxed: 0.1 }, // mildly alert
+                                { relaxed: 0.3, happy: 0.1 }, // quietly happy
+                            ];
+                            const pick =
+                                fidgets[
+                                    Math.floor(Math.random() * fidgets.length)
+                                ];
+                            setExprBlend(pick);
+                        }
+                    } else {
+                        idleVariantTimer = 0;
+                        autoCalloutTimer = 0;
+                        autoCalloutFired = false; // reset so next idle session can trigger
+                        window._lastFidgetTime = 0;
+                    }
+
+                    // 4. Look-At Camera — intensity driven by current state
+                    if (currentVrm.lookAt && currentVrm._setLookAtRange) {
+                        const isTalkingAnim =
+                            currentAnimKey === "reaction_talking" ||
+                            currentAnimKey === "reaction_explaining";
+                        if (!isInIdleState && !isTalkingAnim) {
+                            // During most animations — disable lookAt so head doesn't fight the BVH
+                            currentVrm._setLookAtRange(
+                                currentVrm._lookRangeAnim,
+                            );
+                        } else if (!audioPlayer.paused || isTalkingAnim) {
+                            // While speaking OR during conversational reaction anims — direct eye contact
+                            currentVrm._setLookAtRange(
+                                currentVrm._lookRangeSpeak,
+                            );
+                        } else {
+                            // Idle / listening — subtle ambient glance
+                            currentVrm._setLookAtRange(
+                                currentVrm._lookRangeIdle,
+                            );
+                        }
+                    }
+                    // Debug panel tick
+                    if (debugVisible) {
+                        const activeExpr =
+                            VRM1_EXPRS.find((e) => exprCurrent[e] > 0.05) ||
+                            "neutral";
+                        document.getElementById("dbg-anim").textContent =
+                            currentAnimKey;
+                        document.getElementById("dbg-expr").textContent =
+                            `${activeExpr} (${(exprCurrent[activeExpr] || 0).toFixed(2)})`;
+                        document.getElementById("dbg-idle").textContent =
+                            isInIdleState ? "yes" : "no";
+                        document.getElementById("dbg-idletimer").textContent =
+                            idleVariantTimer.toFixed(1) + "s";
+                        document.getElementById("dbg-autooutfit").textContent =
+                            autoCalloutFired
+                                ? "fired"
+                                : autoCalloutTimer.toFixed(0) +
+                                  "s / " +
+                                  AUTO_CALLOUT_SECS +
+                                  "s";
+                    }
+                }
+                renderer.render(scene, camera);
+            }
+            init();
+
+            window.addEventListener("resize", () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        </script>
+    </body>
+</html>
