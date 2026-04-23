@@ -9,8 +9,8 @@ A fully local, expressive AI companion with a 3D VRM character, voice, emotions,
 ## ✨ Features
 
 - **3D VRM character** rendered with Three.js + `@pixiv/three-vrm` v3 (VRM 1.0 compatible)
-- **19-emotion expression system** — happy, sad, angry, surprised, blushing, pouting, smug, flustered, sleepy, and more, with per-response fading
-- **50+ BVH animations** — idles, dances, reactions, actions (Mixamo → XR Animator pipeline)
+- **Emotion expression system** — happy, sad, angry, surprised, blushing, pouting, smug, flustered, sleepy, and more, with per-response fading
+- **BVH animations** — idles, dances, reactions, actions (Mixamo → XR Animator pipeline)
 - **Voice chat** — Whisper Large v3 STT + Orpheus TTS via Groq API, with hallucination filtering
 - **Vision** — show the companion an image and she describes what she sees (Llama 4 Scout)
 - **Persistent memory** — short-term conversation history + long-term fact extraction across sessions
@@ -50,7 +50,7 @@ open-vrm-companion/
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/yourusername/open-vrm-companion.git
+git clone https://github.com/trisanap/open-vrm-companion.git
 cd open-vrm-companion
 ```
 
@@ -86,7 +86,7 @@ Place your `.vrm` file in the `assets/` folder and update the model path referen
 const MODEL_PATH = "/assets/YourCharacter.vrm";
 ```
 
-> **Don't have a VRM?** Create one for free at [VRoid Studio](https://vroid.com/en/studio). Export as VRM 1.0.
+> **Don't have a VRM?** Create one for free at [VRoid Studio](https://vroid.com/en/studio) or on Steam. Export as VRM 1.0.
 
 ### 5. Run the server
 
@@ -121,8 +121,8 @@ Animations are BVH files sourced from [Mixamo](https://www.mixamo.com/) and conv
 To add a new animation, update **three places** in `groq_bridge.py` and `ava-webui.html`:
 
 1. `VALID_ANIMATIONS` list in `groq_bridge.py`
-2. `PANEL_ANIMATIONS` array in `ava-webui.html`
-3. `curatedAnimations` array in `ava-webui.html`
+2. `PANEL_ANIMATIONS` array in `webui.html`
+3. `curatedAnimations` array in `webui.html`
 
 ---
 
