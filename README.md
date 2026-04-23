@@ -16,7 +16,7 @@ A fully local, expressive AI companion with a 3D VRM character, voice, emotions,
 - **Persistent memory** — short-term conversation history + long-term fact extraction across sessions
 - **Autonomous idle callouts** — the companion speaks up on her own when you've been away
 - **Web search** — live Tavily search injection into the LLM context
-- **Agent mode** (`ava-agent.html`) — multi-step reasoning agent with web search, file read/write, PDF analysis, markdown rendering, and per-session history
+- **Agent mode** (`agent.html`) — multi-step reasoning agent with web search, file read/write, PDF analysis, markdown rendering, and per-session history
 - **Mobile compatible** — HTTPS + Tailscale, deferred AudioContext for Android/iOS
 - **Swappable backends** — any OpenAI-compatible LLM endpoint works in place of Groq
 
@@ -27,9 +27,9 @@ A fully local, expressive AI companion with a 3D VRM character, voice, emotions,
 ```
 open-vrm-companion/
 ├── groq_bridge.py          # Flask backend — LLM, TTS, STT, Vision, Agent
-├── ava-webui.html          # Main companion chat UI with 3D VRM
-├── ava-agent.html          # Agent mode — research, file tasks, markdown output
-├── start_ava.sh            # Launch script
+├── webui.html          # Main companion chat UI with 3D VRM
+├── agent.html          # Agent mode — research, file tasks, markdown output
+├── start.sh            # Launch script
 ├── .env                    # Your API keys (not committed)
 ├── .env.example            # Template — copy this to .env
 ├── memory.json             # Short-term conversation history (auto-generated)
@@ -40,7 +40,7 @@ open-vrm-companion/
     ├── animations/         # BVH animation files
     ├── voices/             # Pre-recorded greeting & idle WAV clips
     ├── YourCharacter.vrm   # Your VRM model (bring your own — see below)
-    └── ava.png             # UI avatar image
+    └── avatar.png             # UI avatar image
 ```
 
 ---
@@ -80,7 +80,7 @@ TAVILY_API_KEY=your_tavily_api_key_here   # optional — enables web search
 
 ### 4. Add your VRM model
 
-Place your `.vrm` file in the `assets/` folder and update the model path reference in `ava-webui.html`:
+Place your `.vrm` file in the `assets/` folder and update the model path reference in `webui.html`:
 
 ```js
 const MODEL_PATH = "/assets/YourCharacter.vrm";
@@ -95,7 +95,7 @@ const MODEL_PATH = "/assets/YourCharacter.vrm";
 python groq_bridge.py
 
 # Or use the launch script
-bash start_ava.sh
+bash start.sh
 ```
 
 Open `http://localhost:5000` in your browser.
@@ -118,7 +118,7 @@ You can then access the companion from any device on your Tailscale network.
 
 Animations are BVH files sourced from [Mixamo](https://www.mixamo.com/) and converted using [XR Animator](https://xr-animator.web.app/). Place BVH files in `assets/animations/`.
 
-To add a new animation, update **three places** in `groq_bridge.py` and `ava-webui.html`:
+To add a new animation, update **three places** in `groq_bridge.py` and `webui.html`:
 
 1. `VALID_ANIMATIONS` list in `groq_bridge.py`
 2. `PANEL_ANIMATIONS` array in `webui.html`
@@ -146,7 +146,7 @@ All models are swappable — edit the model ID constants at the top of `groq_bri
 
 **Change the voice** — update the `voice` parameter in `generate_speech()`. Orpheus voices: `tara`, `leah`, `jess`, `leo`, `dan`, `mia`, `zac`, `zoe`, `autumn`.
 
-**Add new emotions** — add blend shape targets to the VRM expression map in `ava-webui.html`.
+**Add new emotions** — add blend shape targets to the VRM expression map in `webui.html`.
 
 **Swap the LLM backend** — the Groq client is OpenAI-compatible. Point it at Ollama, LM Studio, or any local inference server by changing the `base_url`.
 
