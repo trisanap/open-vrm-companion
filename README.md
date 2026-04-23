@@ -6,6 +6,10 @@ https://undersann.com/images/projects/ava-dance.gif
 
 > Inspired by [ChatVRM](https://github.com/pixiv/ChatVRM), [local-chat-vrm](https://github.com/pixiv/local-chat-vrm), [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber), [ChatVRM-LocalAI](https://github.com/camenduru/ChatVRM-LocalAI), and [Realtime Avatar AI Companion](https://github.com/igna-s/Realtime_Avatar_AI_Companion).
 
+<p align="center">
+  <img src="https://undersann.com/images/projects/ava-dance.gif" width="720" alt="Open VRM Companion demo" />
+</p>
+
 ---
 
 ## ✨ Features
