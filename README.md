@@ -82,7 +82,7 @@ Place your `.vrm` file in the `assets/` folder and update the model path in `web
 const VRM_DEFAULT = assetPathPrefix + "YourCharacter.vrm";
 ```
  
-> **Don't have a VRM?** Create one for free at [VRoid Studio](https://vroid.com/en/studio) or on Steam. Export as VRM 1.0.
+> **Don't have a VRM?** Create one for free at [VRoid Studio](https://vroid.com/en/studio) or on [VRoid Studio Steam page](https://store.steampowered.com/app/1486350/VRoid_Studio/). Export as VRM 1.0.
  
 ### 5. Run the server
  
