@@ -1,0 +1,35 @@
+# Environment & secrets
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# SSL certs
+~/.ava_certs/
+*.crt
+*.key
+
+# Generated runtime files
+memory.json
+persistent_memory.txt
+message_counter.json
+speech.wav
+user_input.wav
+
+# Agent session data
+agent_sessions/
+agent_sessions.json
+
+# GIF
+assets/dance.gif
+
+# Misc
+*.log
+.DS_Store
+Thumbs.db
+main.ipynb
