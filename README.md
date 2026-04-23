@@ -39,10 +39,8 @@ open-vrm-companion/
 ├── message_counter.json    # Message count for memory update intervals
 ├── agent_sessions/         # Per-session agent chat history (auto-generated)
 └── assets/
-    ├── animations/         # BVH animation files
-    ├── voices/             # Pre-recorded greeting & idle WAV clips
-    ├── YourCharacter.vrm   # Your VRM model (bring your own — see below)
-    └── avatar.png             # UI avatar image
+    ├── animations/         # BVH animation files for demo
+    ├── Avatar_Sample.vrm   # Sample VRM model (bring your own — see below)
 ```
 
 ---
@@ -85,7 +83,7 @@ TAVILY_API_KEY=your_tavily_api_key_here   # optional — enables web search
 Place your `.vrm` file in the `assets/` folder and update the model path reference in `webui.html`:
 
 ```js
-const MODEL_PATH = "/assets/YourCharacter.vrm";
+const MODEL_PATH = "/assets/Avatar_Sample.vrm";
 ```
 
 > **Don't have a VRM?** Create one for free at [VRoid Studio](https://vroid.com/en/studio) or on Steam. Export as VRM 1.0.
@@ -182,6 +180,6 @@ All models are swappable — edit the model ID constants at the top of `groq_bri
 
 MIT License — see [LICENSE](LICENSE) for details.
 
-The VRM model file is **not included** in this repository. Please bring your own, respecting the license of your chosen model.
+The VRM model file in this repository is just a sample avatar provided by VRoid Studio. Please bring your own, respecting the license of your chosen model.
 
 Animation BVH files converted from Mixamo are subject to [Adobe's Mixamo license](https://www.adobe.com/legal/terms/mixamo-terms-of-service.html) — personal and commercial use permitted, redistribution restrictions apply.
